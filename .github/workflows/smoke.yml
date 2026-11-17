@@ -5,12 +5,12 @@ name: Smoke
 # launches the real app (window, webview, Rust backend).
 #
 # Pull requests run Windows only, since macOS runners are scarce.
-# Pushes (main, and branches from Scholarkit) and manual runs cover both.
+# Runs started by the mirror or by hand cover both.
 
-# Scholarkit mirrors its main here, and a branch by hand as scholarkit/<branch>.
+# Scholarkit's Mirror workflow starts it after each commit it pushes here, to main or to a
+# scholarkit/<branch> (a push from a workflow starts no workflows by itself). Pull requests
+# here start it too.
 on:
-  push:
-    branches: [main, "scholarkit/**"]
   pull_request:
   workflow_dispatch:
 

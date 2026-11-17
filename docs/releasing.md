@@ -7,9 +7,9 @@ published. A release takes two workflows:
 - **Polemic release** in Scholarkit
   (`.github/workflows/polemic-release.yml` at its root) sets the version,
   commits it and mirrors the commit to polemic-2 with the tag `vX.Y.Z`.
-- **Release** in polemic-2 (`.github/workflows/release.yml` here) starts
-  from that tag: it builds the installers and publishes the GitHub
-  release.
+- **Release** in polemic-2 (`.github/workflows/release.yml` here) runs
+  on that tag, started by the mirror: it builds the installers and
+  publishes the GitHub release.
 
 It releases the version of the `## X.Y.Z (unreleased)` heading in
 [CHANGELOG.md](../CHANGELOG.md).

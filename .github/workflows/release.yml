@@ -1,8 +1,8 @@
 name: Release
 
 # Builds the installers of a version and publishes its GitHub Release. Scholarkit's Polemic
-# release workflow starts it: it sets the version, mirrors the release commit here and pushes
-# the tag vX.Y.Z, which runs this. See docs/releasing.md.
+# release workflow starts it: it sets the version, mirrors the release commit here with the
+# tag vX.Y.Z, and runs this on that tag. See docs/releasing.md.
 #
 # The release is a draft, with the version's changelog section as notes, until the
 # installers for every platform are attached; then it is published as the latest one. If a
@@ -10,8 +10,7 @@ name: Release
 # tag here doesn't undo the release commit in Scholarkit.
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 concurrency:
   group: release
@@ -34,6 +33,10 @@ jobs:
       # Windows installers (MSI) only take numeric versions, so no pre-releases.
       - name: Check the tag
         run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::Run this workflow on a tag vX.Y.Z (got $GITHUB_REF)."
+            exit 1
+          fi
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Invalid tag '$TAG': expected vX.Y.Z"
             exit 1
