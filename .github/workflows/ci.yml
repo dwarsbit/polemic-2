@@ -1,9 +1,9 @@
 name: CI
 
-# Scholarkit mirrors its main here, and a branch by hand as scholarkit/<branch>.
+# Scholarkit's Mirror workflow starts it after each commit it pushes here, to main or to a
+# scholarkit/<branch> (a push from a workflow starts no workflows by itself). Pull requests
+# here start it too.
 on:
-  push:
-    branches: [main, "scholarkit/**"]
   pull_request:
   workflow_dispatch:
 
@@ -21,8 +21,8 @@ jobs:
       fail-fast: false
       matrix:
         # macOS runners are scarce and often queue until they time out,
-        # so pull requests skip them. Pushes to main and manual runs
-        # cover all three systems.
+        # so pull requests skip them. Runs started by the mirror or by
+        # hand cover all three systems.
         os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-latest", "windows-latest"]' || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
