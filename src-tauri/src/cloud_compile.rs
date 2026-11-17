@@ -115,14 +115,17 @@ pub(crate) struct LocalFile {
 /// the walk never yields empty, `.` or `..` segments, or build/).
 fn sendable(path: &str) -> bool {
     path.len() <= 1024
-        && !path.chars().any(|c| c < '\u{20}' || c == '\u{7f}' || c == '\\')
+        && !path
+            .chars()
+            .any(|c| c < '\u{20}' || c == '\u{7f}' || c == '\\')
         && path.split('/').all(|segment| segment.len() <= 255)
 }
 
 /// Hashes by file, while size and modification time stay the same: a
 /// recompile hashes the files that changed, not every image again.
-static HASHES: LazyLock<Mutex<HashMap<PathBuf, (u64, SystemTime, String)>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+/// By path: the size and modification time the hash was made at, and the hash.
+type HashCache = HashMap<PathBuf, (u64, SystemTime, String)>;
+static HASHES: LazyLock<Mutex<HashCache>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub(crate) fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -166,13 +169,18 @@ fn walk(
     if let Some(text) = &gitignore {
         excluder.push(rel, text);
     }
-    let entries = fs::read_dir(folder)
-        .map_err(|e| crate::errors::failed(format_args!("Could not open {}", folder.display()), &e))?;
+    let entries = fs::read_dir(folder).map_err(|e| {
+        crate::errors::failed(format_args!("Could not open {}", folder.display()), &e)
+    })?;
     for entry in entries.flatten() {
         let Some(name) = entry.file_name().to_str().map(str::to_string) else {
             continue;
         };
-        let path = if rel.is_empty() { name } else { format!("{rel}/{name}") };
+        let path = if rel.is_empty() {
+            name
+        } else {
+            format!("{rel}/{name}")
+        };
         let Ok(kind) = entry.file_type() else {
             continue;
         };
@@ -228,7 +236,8 @@ fn walk(
 /// sync (no .git, no build output, .gitignore applied, nothing over
 /// 50 MB), hashed.
 pub(crate) fn local_files(dir: &Path) -> Result<Vec<LocalFile>, CompileError> {
-    let root = fs::canonicalize(dir).map_err(|e| crate::errors::failed("Could not open the project folder", &e))?;
+    let root = fs::canonicalize(dir)
+        .map_err(|e| crate::errors::failed("Could not open the project folder", &e))?;
     let mut out = Vec::new();
     walk(&root, &root, "", &mut Excluder::default(), &mut out, &mut 0)?;
     out.sort_by(|a, b| a.file.path.cmp(&b.file.path));
@@ -390,7 +399,9 @@ async fn upload_missing(
         let bytes = tauri::async_runtime::spawn_blocking(move || fs::read(abs))
             .await
             .map_err(|e| e.to_string())?
-            .map_err(|e| crate::errors::failed(format_args!("Could not open {}", local.file.path), &e))?;
+            .map_err(|e| {
+                crate::errors::failed(format_args!("Could not open {}", local.file.path), &e)
+            })?;
         if hash_bytes(&bytes) != *hash {
             if let Ok(mut hashes) = HASHES.lock() {
                 hashes.remove(&local.abs);
@@ -444,12 +455,14 @@ const OUTPUTS: [(&str, &str); 4] = [
 /// failed compile keeps the last PDF, as latexmk does.
 fn write_outputs(dir: &Path, main: &str, outputs: &[(&str, Vec<u8>)]) -> Result<(), String> {
     let build = dir.join("build");
-    fs::create_dir_all(&build).map_err(|e| crate::errors::failed("Could not create build/ in the project", &e))?;
+    fs::create_dir_all(&build)
+        .map_err(|e| crate::errors::failed("Could not create build/ in the project", &e))?;
     let pdf = build.join(crate::pdf_output_path(main));
     for (ext, bytes) in outputs {
         let path = pdf.with_extension(ext);
-        crate::files::write_atomic(&path, bytes)
-            .map_err(|e| crate::errors::failed(format_args!("Could not save {}", path.display()), &e))?;
+        crate::files::write_atomic(&path, bytes).map_err(|e| {
+            crate::errors::failed(format_args!("Could not save {}", path.display()), &e)
+        })?;
     }
     let stale = OUTPUTS
         .iter()
@@ -546,7 +559,11 @@ pub async fn compile_with(
         }
         return Err(error_for(status, retry.as_deref(), &body));
     }
-    Err("The project's files kept changing while they were uploaded. Compile again.".to_string().into())
+    Err(
+        "The project's files kept changing while they were uploaded. Compile again."
+            .to_string()
+            .into(),
+    )
 }
 
 // --- one compile at a time -----------------------------------------------------
@@ -715,7 +732,11 @@ mod tests {
         std::os::unix::fs::symlink(outside.join("secret.txt"), dir.join("secret.txt")).unwrap();
         std::os::unix::fs::symlink(dir.join("main.tex"), dir.join("alias.tex")).unwrap();
         std::os::unix::fs::symlink(&dir, dir.join("loop")).unwrap();
-        let paths: Vec<String> = manifest(&dir).unwrap().into_iter().map(|f| f.path).collect();
+        let paths: Vec<String> = manifest(&dir)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.path)
+            .collect();
         assert_eq!(paths, ["alias.tex", "main.tex"]);
         fs::remove_dir_all(&dir).unwrap();
         fs::remove_dir_all(&outside).unwrap();
@@ -734,20 +755,40 @@ mod tests {
         assert_eq!(kind(402), PlanRequired);
         assert_eq!(kind(404), Disabled);
         assert_eq!(kind(502), Unavailable);
-        assert_eq!(error_for(409, None, &body("superseded", "x")).kind, Superseded);
+        assert_eq!(
+            error_for(409, None, &body("superseded", "x")).kind,
+            Superseded
+        );
         let large = error_for(413, None, &body("project_too_large", "At most 5000 files"));
-        assert_eq!((large.kind, large.message.as_str()), (TooLarge, "At most 5000 files"));
+        assert_eq!(
+            (large.kind, large.message.as_str()),
+            (TooLarge, "At most 5000 files")
+        );
         let limited = error_for(429, Some("30"), &body("rate_limited", "x"));
         assert_eq!((limited.kind, limited.retry_after), (RateLimited, Some(30)));
-        let used = error_for(429, Some("600"), &body("compile_limit", "You've used today's 5 minutes."));
+        let used = error_for(
+            429,
+            Some("600"),
+            &body("compile_limit", "You've used today's 5 minutes."),
+        );
         assert_eq!(
             (used.kind, used.message.as_str(), used.retry_after),
             (LimitReached, "You've used today's 5 minutes.", Some(600))
         );
         let busy = error_for(503, None, &body("compile_busy", "x"));
-        assert_eq!((busy.kind, busy.retry_after), (RateLimited, Some(DEFAULT_RETRY_AFTER)));
-        let bad = error_for(400, None, &body("invalid_request", "\"a\" is a file and a folder"));
-        assert_eq!((bad.kind, bad.message.as_str()), (Failed, "\"a\" is a file and a folder"));
+        assert_eq!(
+            (busy.kind, busy.retry_after),
+            (RateLimited, Some(DEFAULT_RETRY_AFTER))
+        );
+        let bad = error_for(
+            400,
+            None,
+            &body("invalid_request", "\"a\" is a file and a folder"),
+        );
+        assert_eq!(
+            (bad.kind, bad.message.as_str()),
+            (Failed, "\"a\" is a file and a folder")
+        );
     }
 
     #[test]
@@ -761,7 +802,11 @@ mod tests {
             "https://app.test/api/compile/outputs/ab/pdf"
         );
         assert_eq!(
-            output_url("http://localhost:4000", "http://localhost/api/compile/outputs/ab/log").unwrap(),
+            output_url(
+                "http://localhost:4000",
+                "http://localhost/api/compile/outputs/ab/log"
+            )
+            .unwrap(),
             "http://localhost:4000/api/compile/outputs/ab/log"
         );
         assert!(output_url("https://app.test", "https://app.test/api/me").is_err());
@@ -810,7 +855,8 @@ mod tests {
                 let path = request_line.next().unwrap().to_string();
                 let authorization = head.lines().find_map(|l| {
                     let (name, value) = l.split_once(':')?;
-                    name.eq_ignore_ascii_case("authorization").then(|| value.trim().to_string())
+                    name.eq_ignore_ascii_case("authorization")
+                        .then(|| value.trim().to_string())
                 });
                 seen.push(Seen {
                     method,
@@ -838,7 +884,13 @@ mod tests {
 
     fn compile(port: u16, dir: &Path) -> Result<Compiled, CompileError> {
         let server = format!("http://127.0.0.1:{port}");
-        tauri::async_runtime::block_on(compile_with(&server, "tok", dir, "main.tex", Engine::Xelatex))
+        tauri::async_runtime::block_on(compile_with(
+            &server,
+            "tok",
+            dir,
+            "main.tex",
+            Engine::Xelatex,
+        ))
     }
 
     const MAIN: &str = "\\documentclass{article}";
@@ -876,9 +928,14 @@ mod tests {
         let (port, server) = stub(vec![
             json(
                 "409 Conflict",
-                &format!(r#"{{"error":"files_missing","message":"Upload","missing":["{png_hash}"]}}"#),
+                &format!(
+                    r#"{{"error":"files_missing","message":"Upload","missing":["{png_hash}"]}}"#
+                ),
             ),
-            json("201 Created", &format!(r#"{{"hash":"{png_hash}","size":9}}"#)),
+            json(
+                "201 Created",
+                &format!(r#"{{"hash":"{png_hash}","size":9}}"#),
+            ),
             finished("success", &["pdf", "synctex", "log"]),
             answer("200 OK", "", "%PDF"),
             answer("200 OK", "", "gz"),
@@ -894,8 +951,10 @@ mod tests {
             }
         );
         let seen = server.join().unwrap();
-        let requests: Vec<(&str, &str)> =
-            seen.iter().map(|s| (s.method.as_str(), s.path.as_str())).collect();
+        let requests: Vec<(&str, &str)> = seen
+            .iter()
+            .map(|s| (s.method.as_str(), s.path.as_str()))
+            .collect();
         let output = |kind: &str| format!("/api/compile/outputs/{}/{kind}", "c".repeat(32));
         assert_eq!(
             requests,
@@ -908,7 +967,9 @@ mod tests {
                 ("GET", output("log").as_str()),
             ]
         );
-        assert!(seen.iter().all(|s| s.authorization.as_deref() == Some("Bearer tok")));
+        assert!(seen
+            .iter()
+            .all(|s| s.authorization.as_deref() == Some("Bearer tok")));
         assert_eq!(seen[1].body, PNG.as_bytes());
         let manifest: serde_json::Value = serde_json::from_slice(&seen[0].body).unwrap();
         assert_eq!(
@@ -925,8 +986,14 @@ mod tests {
         assert_eq!(seen[2].body, seen[0].body);
         let build = dir.join("build");
         assert_eq!(fs::read_to_string(build.join("main.pdf")).unwrap(), "%PDF");
-        assert_eq!(fs::read_to_string(build.join("main.synctex.gz")).unwrap(), "gz");
-        assert_eq!(fs::read_to_string(build.join("main.log")).unwrap(), "This is XeTeX");
+        assert_eq!(
+            fs::read_to_string(build.join("main.synctex.gz")).unwrap(),
+            "gz"
+        );
+        assert_eq!(
+            fs::read_to_string(build.join("main.log")).unwrap(),
+            "This is XeTeX"
+        );
         assert!(!build.join("main.blg").exists());
         assert!(!build.join("main.fdb_latexmk").exists());
         fs::remove_dir_all(&dir).unwrap();
@@ -946,7 +1013,10 @@ mod tests {
         assert_eq!(compiled.status, "failure");
         assert_eq!(server.join().unwrap().len(), 2);
         let build = dir.join("build");
-        assert_eq!(fs::read_to_string(build.join("main.pdf")).unwrap(), "old pdf");
+        assert_eq!(
+            fs::read_to_string(build.join("main.pdf")).unwrap(),
+            "old pdf"
+        );
         assert!(!build.join("main.synctex.gz").exists());
         fs::remove_dir_all(&dir).unwrap();
     }
@@ -966,12 +1036,56 @@ mod tests {
             result.unwrap_err()
         };
         use CompileErrorKind::*;
-        assert_eq!(error("401 Unauthorized", "", r#"{"error":"unauthorized","message":"x"}"#).kind, SignedOut);
-        assert_eq!(error("402 Payment Required", "", r#"{"error":"plan_required","message":"x"}"#).kind, PlanRequired);
-        assert_eq!(error("409 Conflict", "", r#"{"error":"superseded","message":"x"}"#).kind, Superseded);
-        assert_eq!(error("404 Not Found", "", r#"{"error":"compile_disabled","message":"x"}"#).kind, Disabled);
-        assert_eq!(error("502 Bad Gateway", "", r#"{"error":"compile_unavailable","message":"x"}"#).kind, Unavailable);
-        let busy = error("503 Service Unavailable", "Retry-After: 7\r\n", r#"{"error":"compile_busy","message":"x"}"#);
+        assert_eq!(
+            error(
+                "401 Unauthorized",
+                "",
+                r#"{"error":"unauthorized","message":"x"}"#
+            )
+            .kind,
+            SignedOut
+        );
+        assert_eq!(
+            error(
+                "402 Payment Required",
+                "",
+                r#"{"error":"plan_required","message":"x"}"#
+            )
+            .kind,
+            PlanRequired
+        );
+        assert_eq!(
+            error(
+                "409 Conflict",
+                "",
+                r#"{"error":"superseded","message":"x"}"#
+            )
+            .kind,
+            Superseded
+        );
+        assert_eq!(
+            error(
+                "404 Not Found",
+                "",
+                r#"{"error":"compile_disabled","message":"x"}"#
+            )
+            .kind,
+            Disabled
+        );
+        assert_eq!(
+            error(
+                "502 Bad Gateway",
+                "",
+                r#"{"error":"compile_unavailable","message":"x"}"#
+            )
+            .kind,
+            Unavailable
+        );
+        let busy = error(
+            "503 Service Unavailable",
+            "Retry-After: 7\r\n",
+            r#"{"error":"compile_busy","message":"x"}"#,
+        );
         assert_eq!((busy.kind, busy.retry_after), (RateLimited, Some(7)));
         assert!(!dir.join("build").exists());
         fs::remove_dir_all(&dir).unwrap();
@@ -984,7 +1098,10 @@ mod tests {
         let (port, server) = stub(vec![
             finished("success", &["pdf", "log"]),
             answer("200 OK", "", "%PDF"),
-            json("404 Not Found", r#"{"error":"not_found","message":"expired"}"#),
+            json(
+                "404 Not Found",
+                r#"{"error":"not_found","message":"expired"}"#,
+            ),
         ]);
         let error = compile(port, &dir).unwrap_err();
         assert_eq!(error.kind, CompileErrorKind::Failed);
@@ -998,8 +1115,15 @@ mod tests {
     fn unreachable_servers_are_unavailable() {
         let dir = temp_project("unreachable");
         write(&dir, "main.tex", MAIN);
-        let port = TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
-        assert_eq!(compile(port, &dir).unwrap_err().kind, CompileErrorKind::Unavailable);
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        assert_eq!(
+            compile(port, &dir).unwrap_err().kind,
+            CompileErrorKind::Unavailable
+        );
         fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -1048,14 +1172,38 @@ mod tests {
                 "tok",
             ));
             let seen = server.join().unwrap();
-            assert_eq!(seen[0].path, format!("/api/compile/outputs/{}/pdf", "0".repeat(32)));
+            assert_eq!(
+                seen[0].path,
+                format!("/api/compile/outputs/{}/pdf", "0".repeat(32))
+            );
             result
         };
         use Availability::*;
-        assert_eq!(probe("404 Not Found", r#"{"error":"not_found","message":"x"}"#), Available);
-        assert_eq!(probe("404 Not Found", r#"{"error":"compile_disabled","message":"x"}"#), Disabled);
-        assert_eq!(probe("402 Payment Required", r#"{"error":"plan_required","message":"x"}"#), PlanRequired);
-        assert_eq!(probe("401 Unauthorized", r#"{"error":"unauthorized","message":"x"}"#), SignedOut);
+        assert_eq!(
+            probe("404 Not Found", r#"{"error":"not_found","message":"x"}"#),
+            Available
+        );
+        assert_eq!(
+            probe(
+                "404 Not Found",
+                r#"{"error":"compile_disabled","message":"x"}"#
+            ),
+            Disabled
+        );
+        assert_eq!(
+            probe(
+                "402 Payment Required",
+                r#"{"error":"plan_required","message":"x"}"#
+            ),
+            PlanRequired
+        );
+        assert_eq!(
+            probe(
+                "401 Unauthorized",
+                r#"{"error":"unauthorized","message":"x"}"#
+            ),
+            SignedOut
+        );
         assert_eq!(probe("500 Internal Server Error", "{}"), Unknown);
     }
 
@@ -1076,23 +1224,38 @@ mod tests {
         );
         write(&dir, "ch/one.tex", "world.\n");
         let run = || {
-            tauri::async_runtime::block_on(compile_with(&server, &token, &dir, "main.tex", Engine::Pdflatex))
-                .unwrap()
+            tauri::async_runtime::block_on(compile_with(
+                &server,
+                &token,
+                &dir,
+                "main.tex",
+                Engine::Pdflatex,
+            ))
+            .unwrap()
         };
         let compiled = run();
         assert_eq!(compiled.status, "success", "{}", compiled.output);
-        assert!(fs::read(dir.join("build/main.pdf")).unwrap().starts_with(b"%PDF"));
+        assert!(fs::read(dir.join("build/main.pdf"))
+            .unwrap()
+            .starts_with(b"%PDF"));
         assert!(dir.join("build/main.synctex.gz").exists());
-        assert!(fs::read_to_string(dir.join("build/main.log")).unwrap().contains("ch/one.tex"));
+        assert!(fs::read_to_string(dir.join("build/main.log"))
+            .unwrap()
+            .contains("ch/one.tex"));
         // A second compile finds every file cached.
         assert_eq!(run().status, "success");
-        write(&dir, "main.tex", "\\documentclass{article}\n\\begin{document}\n\\oops\n\\end{document}\n");
+        write(
+            &dir,
+            "main.tex",
+            "\\documentclass{article}\n\\begin{document}\n\\oops\n\\end{document}\n",
+        );
         let failed = run();
         assert_eq!(failed.status, "failure");
         let log = fs::read_to_string(dir.join("build/main.log")).unwrap();
         // Project-relative, as after a local compile: the Problems list opens it.
         assert!(crate::logparse::parse_issues(&log).iter().any(|i| {
-            i.message.contains("Undefined control sequence") && i.file.as_deref() == Some("main.tex")
+            i.message.contains("Undefined control sequence")
+                && i.file.as_deref() == Some("main.tex")
         }));
         let available = tauri::async_runtime::block_on(availability_with(&server, &token));
         assert_eq!(available, Availability::Available);

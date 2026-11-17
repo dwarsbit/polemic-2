@@ -261,7 +261,9 @@ fn packages_engine(
 }
 
 /// The engine for a compile: the project setting, else the main file's
-/// magic comment, else a guess from the preamble.
+/// magic comment, else a guess from the preamble. The app and the corpus
+/// probe use [`resolve_in_project`]; this is the shorthand the tests use.
+#[cfg(test)]
 pub fn resolve(config: &ProjectConfig, main_source: &str) -> Engine {
     resolve_in_project(config, "main.tex", main_source, &|_| None)
 }
@@ -313,7 +315,10 @@ mod tests {
     #[test]
     fn reads_magic_comments() {
         assert_eq!(
-            resolve(&auto(), "% !TEX program = xelatex\n\\documentclass{article}"),
+            resolve(
+                &auto(),
+                "% !TEX program = xelatex\n\\documentclass{article}"
+            ),
             Engine::Xelatex
         );
         assert_eq!(
@@ -322,16 +327,23 @@ mod tests {
         );
         // Past the leading comment block it no longer counts.
         assert_eq!(
-            resolve(&auto(), "\\documentclass{article}\n% !TEX program = xelatex\n"),
+            resolve(
+                &auto(),
+                "\\documentclass{article}\n% !TEX program = xelatex\n"
+            ),
             Engine::Pdflatex
         );
         // An unknown program falls through to the default.
-        assert_eq!(resolve(&auto(), "% !TEX program = rm -rf\n"), Engine::Pdflatex);
+        assert_eq!(
+            resolve(&auto(), "% !TEX program = rm -rf\n"),
+            Engine::Pdflatex
+        );
     }
 
     #[test]
     fn guesses_from_the_preamble() {
-        let src = "\\documentclass{article}\n\\usepackage{fontspec}\n\\begin{document}\\end{document}";
+        let src =
+            "\\documentclass{article}\n\\usepackage{fontspec}\n\\begin{document}\\end{document}";
         assert_eq!(resolve(&auto(), src), Engine::Xelatex);
         let commented = "\\documentclass{article}\n% \\usepackage{fontspec}\n\\begin{document}";
         assert_eq!(resolve(&auto(), commented), Engine::Pdflatex);
@@ -447,10 +459,22 @@ mod tests {
 
     #[test]
     fn the_project_setting_wins() {
-        let config = ProjectConfig { engine: Some("lualatex".into()), ..Default::default() };
-        assert_eq!(resolve(&config, "% !TEX program = xelatex\n"), Engine::Lualatex);
-        let auto_set = ProjectConfig { engine: Some("auto".into()), ..Default::default() };
-        assert_eq!(resolve(&auto_set, "% !TEX program = xelatex\n"), Engine::Xelatex);
+        let config = ProjectConfig {
+            engine: Some("lualatex".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve(&config, "% !TEX program = xelatex\n"),
+            Engine::Lualatex
+        );
+        let auto_set = ProjectConfig {
+            engine: Some("auto".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve(&auto_set, "% !TEX program = xelatex\n"),
+            Engine::Xelatex
+        );
     }
 
     #[test]
@@ -458,9 +482,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("polemic-profile-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        let bad = ProjectConfig { engine: Some("-shell-escape".into()), ..Default::default() };
+        let bad = ProjectConfig {
+            engine: Some("-shell-escape".into()),
+            ..Default::default()
+        };
         assert!(save(&dir, &bad).is_err());
-        let good = ProjectConfig { engine: Some("xelatex".into()), ..Default::default() };
+        let good = ProjectConfig {
+            engine: Some("xelatex".into()),
+            ..Default::default()
+        };
         save(&dir, &good).unwrap();
         assert_eq!(load(&dir), good);
         let _ = fs::remove_dir_all(&dir);

@@ -698,8 +698,8 @@ export function VisualTexEditor() {
       <VisualToolbar editor={editor} />
       {(rawCount ?? 0) > 0 && (
         <p className="shrink-0 border-b bg-accent/40 px-3 py-1 text-xs text-muted-foreground">
-          Some constructs are shown as raw LaTeX. Double-click to edit them
-          in place, or switch to Code.
+          Some constructs are shown as raw LaTeX. Double-click to edit them in place, or
+          switch to Code.
         </p>
       )}
       {missingMaketitle === true && (

@@ -48,7 +48,9 @@ pub fn resolve_in_project(project_dir: &str, rel_path: &str) -> Result<PathBuf, 
     let real = fs::canonicalize(existing)
         .map_err(|e| crate::errors::failed(format_args!("Could not open {rel_path}"), &e))?;
     if !real.starts_with(&base) {
-        return Err(format!("{rel_path} leads outside the project folder, so Polemic leaves it alone."));
+        return Err(format!(
+            "{rel_path} leads outside the project folder, so Polemic leaves it alone."
+        ));
     }
     Ok(target)
 }
@@ -147,14 +149,16 @@ fn configured_sources(app: &tauri::AppHandle) -> Result<Vec<SourceDef>, String> 
 }
 
 fn read_bib_source_file(sources: &[SourceDef], path: &str) -> Result<String, String> {
-    let resolved = fs::canonicalize(path).map_err(|e| crate::errors::failed(format_args!("Could not open {path}"), &e))?;
+    let resolved = fs::canonicalize(path)
+        .map_err(|e| crate::errors::failed(format_args!("Could not open {path}"), &e))?;
     if !resolved.is_file() || !is_bib(&resolved) {
         return Err("That isn't a .bib file.".into());
     }
     if !settings::bib_source_covers(sources, &resolved) {
         return Err("That file isn't part of a source in Settings.".into());
     }
-    fs::read_to_string(&resolved).map_err(|e| crate::errors::failed(format_args!("Could not open {path}"), &e))
+    fs::read_to_string(&resolved)
+        .map_err(|e| crate::errors::failed(format_args!("Could not open {path}"), &e))
 }
 
 fn list_bib_source(sources: &[SourceDef], path: &str) -> Result<Vec<String>, String> {
@@ -219,7 +223,10 @@ mod tests {
         let dir = temp_project("inside");
         let base = fs::canonicalize(&dir).unwrap();
         let p = dir.to_string_lossy().to_string();
-        assert_eq!(resolve_in_project(&p, "main.tex").unwrap(), base.join("main.tex"));
+        assert_eq!(
+            resolve_in_project(&p, "main.tex").unwrap(),
+            base.join("main.tex")
+        );
         // New files in new folders resolve against their existing ancestor.
         assert!(resolve_in_project(&p, "chapters/new/intro.tex").is_ok());
         assert!(resolve_in_project(&p, "../escape.tex").is_err());

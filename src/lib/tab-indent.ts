@@ -1,5 +1,6 @@
 import { type ChangeSpec, type EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
+import { keymap } from "@codemirror/view";
 
 /** Spaces per indent level (matches the formatter's indent width). */
 export const INDENT_WIDTH = 2;

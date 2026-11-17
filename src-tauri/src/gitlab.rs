@@ -110,10 +110,9 @@ pub async fn username_of(endpoints: &Endpoints, token: &str) -> Result<String, S
     if !response.status().is_success() {
         return Err(format!("GitLab answered {}.", response.status()));
     }
-    let user: User = response
-        .json()
-        .await
-        .map_err(|_| "GitLab gave an answer Polemic can't read. Try again in a moment.".to_string())?;
+    let user: User = response.json().await.map_err(|_| {
+        "GitLab gave an answer Polemic can't read. Try again in a moment.".to_string()
+    })?;
     Ok(user.username)
 }
 
@@ -145,10 +144,9 @@ pub async fn create_project(
         .map_err(|e| crate::errors::no_answer("GitLab", e.is_timeout()))?;
     let status = response.status();
     if status.is_success() {
-        let project: CreatedProject = response
-            .json()
-            .await
-            .map_err(|_| "GitLab gave an answer Polemic can't read. Try again in a moment.".to_string())?;
+        let project: CreatedProject = response.json().await.map_err(|_| {
+            "GitLab gave an answer Polemic can't read. Try again in a moment.".to_string()
+        })?;
         return Ok(project.http_url_to_repo);
     }
     // GitLab's message is a string or a map of field → messages.
@@ -196,7 +194,10 @@ mod tests {
     use crate::github::tests::mock_server;
 
     fn endpoints(base: &str) -> Endpoints {
-        Endpoints { web: base.to_string(), api: format!("{base}/api/v4") }
+        Endpoints {
+            web: base.to_string(),
+            api: format!("{base}/api/v4"),
+        }
     }
 
     #[test]
@@ -213,7 +214,8 @@ mod tests {
     fn signs_in_with_the_api_scope_and_keeps_the_refresh_token() {
         let polls = Arc::new(std::sync::Mutex::new(0));
         let counter = polls.clone();
-        let (base, seen) = mock_server(Box::new(move |r| match r.path.as_str() {
+        let (base, seen) = mock_server(Box::new(move |r| {
+            match r.path.as_str() {
             "/oauth/authorize_device" => (200, r#"{"device_code":"dev","user_code":"WXYZ-1234","verification_uri":"https://gitlab.com/oauth/device","verification_uri_complete":"https://gitlab.com/oauth/device?user_code=WXYZ-1234","expires_in":300,"interval":1}"#.into()),
             "/oauth/token" => {
                 let mut n = counter.lock().unwrap();
@@ -226,6 +228,7 @@ mod tests {
             }
             "/api/v4/user" => (200, r#"{"id":1,"username":"ada","name":"Ada"}"#.into()),
             _ => (404, "{}".into()),
+        }
         }));
         let e = endpoints(&base);
         let code = tauri::async_runtime::block_on(request_device_code(&e, "app")).unwrap();
@@ -241,7 +244,10 @@ mod tests {
         assert_eq!(tokens.access_token, "glo-a");
         assert_eq!(tokens.refresh_token.as_deref(), Some("glo-r"));
         assert_eq!(tokens.expires_in, Some(7200));
-        assert_eq!(tauri::async_runtime::block_on(username_of(&e, "glo-a")).unwrap(), "ada");
+        assert_eq!(
+            tauri::async_runtime::block_on(username_of(&e, "glo-a")).unwrap(),
+            "ada"
+        );
         let seen = seen.lock().unwrap();
         assert!(seen[0].body.contains("scope=api") && seen[0].body.contains("client_id=app"));
         assert!(seen.last().unwrap().headers.contains("Bearer glo-a"));
@@ -257,9 +263,14 @@ mod tests {
             }
         }));
         let e = endpoints(&base);
-        let error = tauri::async_runtime::block_on(create_project(&e, "t", "taken", true)).unwrap_err();
-        assert!(error.contains("already have a project named taken"), "{error}");
-        let error = tauri::async_runtime::block_on(create_project(&e, "t", "other", true)).unwrap_err();
+        let error =
+            tauri::async_runtime::block_on(create_project(&e, "t", "taken", true)).unwrap_err();
+        assert!(
+            error.contains("already have a project named taken"),
+            "{error}"
+        );
+        let error =
+            tauri::async_runtime::block_on(create_project(&e, "t", "other", true)).unwrap_err();
         assert!(error.contains("api scope"), "{error}");
     }
 
@@ -277,8 +288,16 @@ mod tests {
         std::fs::create_dir_all(&bare).unwrap();
         std::fs::create_dir_all(&project).unwrap();
         let run = |dir: &std::path::Path, args: &[&str]| {
-            let out = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
-            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
         };
         run(&bare, &["init", "-q", "--bare", "-b", "main"]);
         let bare_url = url::Url::from_file_path(&bare).unwrap().to_string();
@@ -307,10 +326,16 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(url, bare_url);
-        assert_eq!(git::status(&project).upstream.as_deref(), Some("origin/main"));
+        assert_eq!(
+            git::status(&project).upstream.as_deref(),
+            Some("origin/main")
+        );
         let request = &seen.lock().unwrap()[0];
         assert!(request.headers.contains("Bearer glo-a"));
-        assert!(request.body.contains("\"visibility\":\"private\"") && request.body.contains("\"path\":\"paper\""));
+        assert!(
+            request.body.contains("\"visibility\":\"private\"")
+                && request.body.contains("\"path\":\"paper\"")
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 }

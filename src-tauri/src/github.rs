@@ -21,8 +21,8 @@ use std::time::Duration;
 use serde::Deserialize;
 
 use crate::git::Credentials;
-pub use crate::hosting::{check_repo_name, first_client_id, DeviceCode};
 use crate::hosting::{self, client, Flow};
+pub use crate::hosting::{check_repo_name, first_client_id, DeviceCode};
 
 pub const HOST: &str = "github.com";
 const SCOPE: &str = "repo";
@@ -109,10 +109,9 @@ pub async fn login_of(endpoints: &Endpoints, token: &str) -> Result<String, Stri
     if !response.status().is_success() {
         return Err(format!("GitHub answered {}.", response.status()));
     }
-    let user: User = response
-        .json()
-        .await
-        .map_err(|_| "GitHub gave an answer Polemic can't read. Try again in a moment.".to_string())?;
+    let user: User = response.json().await.map_err(|_| {
+        "GitHub gave an answer Polemic can't read. Try again in a moment.".to_string()
+    })?;
     Ok(user.login)
 }
 
@@ -151,10 +150,9 @@ pub async fn create_repo(
         .map_err(|e| crate::errors::no_answer("GitHub", e.is_timeout()))?;
     let status = response.status();
     if status.is_success() {
-        let repo: CreatedRepo = response
-            .json()
-            .await
-            .map_err(|_| "GitHub gave an answer Polemic can't read. Try again in a moment.".to_string())?;
+        let repo: CreatedRepo = response.json().await.map_err(|_| {
+            "GitHub gave an answer Polemic can't read. Try again in a moment.".to_string()
+        })?;
         return Ok(repo.clone_url);
     }
     let error = response.json::<ApiError>().await.ok();
@@ -167,9 +165,7 @@ pub async fn create_repo(
     });
     Err(match status.as_u16() {
         401 => "GitHub does not accept this token: sign in again".into(),
-        403 | 404 => {
-            "The GitHub token may not create repositories: it needs the repo scope".into()
-        }
+        403 | 404 => "The GitHub token may not create repositories: it needs the repo scope".into(),
         422 if taken => format!("You already have a repository named {name} on GitHub"),
         _ => error
             .map(|e| format!("GitHub refused: {}", e.message))
@@ -243,7 +239,8 @@ pub mod tests {
                     .lines()
                     .find_map(|l| {
                         let (k, v) = l.split_once(':')?;
-                        k.eq_ignore_ascii_case("content-length").then(|| v.trim().parse::<usize>().ok())?
+                        k.eq_ignore_ascii_case("content-length")
+                            .then(|| v.trim().parse::<usize>().ok())?
                     })
                     .unwrap_or(0);
                 while data.len() < body_start + length {
@@ -273,7 +270,10 @@ pub mod tests {
     }
 
     fn endpoints(base: &str) -> Endpoints {
-        Endpoints { web: base.to_string(), api: base.to_string() }
+        Endpoints {
+            web: base.to_string(),
+            api: base.to_string(),
+        }
     }
 
     fn device_code() -> DeviceCode {
@@ -288,10 +288,19 @@ pub mod tests {
 
     #[test]
     fn picks_the_first_client_id_that_is_set() {
-        assert_eq!(first_client_id(&[None, None, Some("own")]).as_deref(), Some("own"));
-        assert_eq!(first_client_id(&[Some("fork"), None, Some("own")]).as_deref(), Some("fork"));
+        assert_eq!(
+            first_client_id(&[None, None, Some("own")]).as_deref(),
+            Some("own")
+        );
+        assert_eq!(
+            first_client_id(&[Some("fork"), None, Some("own")]).as_deref(),
+            Some("fork")
+        );
         // An empty build variable (an unset repository variable) is no override.
-        assert_eq!(first_client_id(&[None, Some(" "), Some("own")]).as_deref(), Some("own"));
+        assert_eq!(
+            first_client_id(&[None, Some(" "), Some("own")]).as_deref(),
+            Some("own")
+        );
         assert!(client_id().is_some());
     }
 
@@ -308,8 +317,8 @@ pub mod tests {
         let (base, seen) = mock_server(Box::new(|_| {
             (200, r#"{"device_code":"dev-1","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}"#.into())
         }));
-        let code = tauri::async_runtime::block_on(request_device_code(&endpoints(&base), "cid"))
-            .unwrap();
+        let code =
+            tauri::async_runtime::block_on(request_device_code(&endpoints(&base), "cid")).unwrap();
         assert_eq!(code.user_code, "ABCD-1234");
         assert_eq!(code.interval, 5);
         let seen = seen.lock().unwrap();
@@ -319,7 +328,9 @@ pub mod tests {
 
     #[test]
     fn device_flow_disabled_is_explained() {
-        let (base, _) = mock_server(Box::new(|_| (200, r#"{"error":"device_flow_disabled"}"#.into())));
+        let (base, _) = mock_server(Box::new(|_| {
+            (200, r#"{"error":"device_flow_disabled"}"#.into())
+        }));
         let error = tauri::async_runtime::block_on(request_device_code(&endpoints(&base), "cid"))
             .unwrap_err();
         assert!(error.contains("Add a token instead"), "{error}");
@@ -351,7 +362,9 @@ pub mod tests {
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 3);
         assert!(seen[0].body.contains("device_code=dev-1"));
-        assert!(seen[0].body.contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"));
+        assert!(seen[0]
+            .body
+            .contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"));
     }
 
     #[test]
@@ -367,8 +380,9 @@ pub mod tests {
         .unwrap_err();
         assert!(error.contains("cancelled on GitHub"), "{error}");
 
-        let (base, seen) =
-            mock_server(Box::new(|_| (200, r#"{"error":"authorization_pending"}"#.into())));
+        let (base, seen) = mock_server(Box::new(|_| {
+            (200, r#"{"error":"authorization_pending"}"#.into())
+        }));
         let error = tauri::async_runtime::block_on(wait_for_token(
             &endpoints(&base),
             "cid",
@@ -391,7 +405,10 @@ pub mod tests {
             }
         }));
         let e = endpoints(&base);
-        assert_eq!(tauri::async_runtime::block_on(login_of(&e, "gho_token")).unwrap(), "ada");
+        assert_eq!(
+            tauri::async_runtime::block_on(login_of(&e, "gho_token")).unwrap(),
+            "ada"
+        );
         let error = tauri::async_runtime::block_on(login_of(&e, "wrong")).unwrap_err();
         assert!(error.contains("doesn't accept"), "{error}");
         assert_eq!(seen.lock().unwrap()[0].path, "/user");
@@ -403,13 +420,21 @@ pub mod tests {
             if r.body.contains("\"name\":\"taken\"") {
                 (422, r#"{"message":"Repository creation failed.","errors":[{"resource":"Repository","code":"custom","field":"name","message":"name already exists on this account"}]}"#.into())
             } else {
-                (403, r#"{"message":"Resource not accessible by integration"}"#.into())
+                (
+                    403,
+                    r#"{"message":"Resource not accessible by integration"}"#.into(),
+                )
             }
         }));
         let e = endpoints(&base);
-        let error = tauri::async_runtime::block_on(create_repo(&e, "t", "taken", true)).unwrap_err();
-        assert!(error.contains("already have a repository named taken"), "{error}");
-        let error = tauri::async_runtime::block_on(create_repo(&e, "t", "other", true)).unwrap_err();
+        let error =
+            tauri::async_runtime::block_on(create_repo(&e, "t", "taken", true)).unwrap_err();
+        assert!(
+            error.contains("already have a repository named taken"),
+            "{error}"
+        );
+        let error =
+            tauri::async_runtime::block_on(create_repo(&e, "t", "other", true)).unwrap_err();
         assert!(error.contains("repo scope"), "{error}");
     }
 
@@ -428,8 +453,16 @@ pub mod tests {
         std::fs::create_dir_all(&bare).unwrap();
         std::fs::create_dir_all(&project).unwrap();
         let run = |dir: &std::path::Path, args: &[&str]| {
-            let out = std::process::Command::new("git").args(args).current_dir(dir).output().unwrap();
-            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(dir)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
         };
         run(&bare, &["init", "-q", "--bare", "-b", "main"]);
         let bare_url = url::Url::from_file_path(&bare).unwrap().to_string();
@@ -446,26 +479,35 @@ pub mod tests {
         run(&project, &["init", "-q", "-b", "main"]);
         run(&project, &["config", "user.email", "t@example.com"]);
         run(&project, &["config", "user.name", "T"]);
-        let error = tauri::async_runtime::block_on(publish_with(&e, &project, "ada", "t", "paper", true))
-            .unwrap_err();
+        let error =
+            tauri::async_runtime::block_on(publish_with(&e, &project, "ada", "t", "paper", true))
+                .unwrap_err();
         assert!(error.contains("first commit"), "{error}");
 
         std::fs::write(project.join("main.tex"), "hello\n").unwrap();
         run(&project, &["add", "main.tex"]);
         run(&project, &["commit", "-qm", "first"]);
-        let url = tauri::async_runtime::block_on(publish_with(&e, &project, "ada", "t", "paper", true))
-            .unwrap();
+        let url =
+            tauri::async_runtime::block_on(publish_with(&e, &project, "ada", "t", "paper", true))
+                .unwrap();
         assert_eq!(url, bare_url);
-        assert_eq!(git::remote_url(&project).as_deref(), Some(bare_url.as_str()));
+        assert_eq!(
+            git::remote_url(&project).as_deref(),
+            Some(bare_url.as_str())
+        );
         let status = git::status(&project);
         assert_eq!(status.upstream.as_deref(), Some("origin/main"));
         assert_eq!(status.ahead, 0);
         let request = &seen.lock().unwrap()[0];
         assert!(request.headers.contains("Bearer t"));
-        assert!(request.body.contains("\"private\":true") && request.body.contains("\"name\":\"paper\""));
+        assert!(
+            request.body.contains("\"private\":true")
+                && request.body.contains("\"name\":\"paper\"")
+        );
 
-        let error = tauri::async_runtime::block_on(publish_with(&e, &project, "ada", "t", "paper", true))
-            .unwrap_err();
+        let error =
+            tauri::async_runtime::block_on(publish_with(&e, &project, "ada", "t", "paper", true))
+                .unwrap_err();
         assert!(error.contains("already has a remote"), "{error}");
         let _ = std::fs::remove_dir_all(root);
     }

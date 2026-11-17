@@ -1,24 +1,24 @@
 mod account;
-mod errors;
+mod ai;
+mod assets;
+mod bib_lookup;
 mod cloud_compile;
+mod comments;
+mod errors;
 mod excludes;
 mod files;
 pub mod git;
 mod git_accounts;
 mod github;
 mod gitlab;
-mod hosting;
+mod grammar;
 mod guard;
+mod hosting;
+mod link;
 mod logparse;
 mod profile;
 mod secrets;
-mod comments;
-mod assets;
-mod grammar;
-mod ai;
-mod bib_lookup;
 mod settings;
-mod link;
 mod share;
 mod snapshots;
 mod spell;
@@ -29,10 +29,10 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::process::Command;
 
-use tauri::Manager;
-use files::{read_external_file, list_bib_files, FileEntry};
-use settings::{Settings, SettingsState, SourceDef};
 use bib_lookup::lookup_bibtex;
+use files::{list_bib_files, read_external_file, FileEntry};
+use settings::{Settings, SettingsState, SourceDef};
+use tauri::Manager;
 use zotero::zotero_local_fetch;
 
 #[derive(Serialize, Clone)]
@@ -84,7 +84,6 @@ pub struct SynctexBackward {
     pub line: u32,
 }
 
-
 fn probe(tool: &str) -> ToolInfo {
     match Command::new(tool).arg("--version").output() {
         Ok(out) if out.status.success() => {
@@ -113,7 +112,12 @@ fn locate(tool: &str) -> Option<String> {
     output
         .ok()
         .filter(|out| out.status.success())
-        .and_then(|out| String::from_utf8_lossy(&out.stdout).lines().next().map(str::to_string))
+        .and_then(|out| {
+            String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .next()
+                .map(str::to_string)
+        })
 }
 
 fn validate_project_name(name: &str) -> Result<(), String> {
@@ -122,7 +126,9 @@ fn validate_project_name(name: &str) -> Result<(), String> {
         return Err("Give the project a name.".into());
     }
     if name.starts_with('.') || name.contains('/') || name.contains('\\') || name.contains("..") {
-        return Err("A project name can't start with a dot or contain a slash. Choose another name.".into());
+        return Err(
+            "A project name can't start with a dot or contain a slash. Choose another name.".into(),
+        );
     }
     Ok(())
 }
@@ -151,7 +157,9 @@ fn pdf_output_path(main_tex: &str) -> std::path::PathBuf {
 fn validate_tex_arg(project_dir: &str, tex: &str) -> Result<(), String> {
     project_file(project_dir, tex)?;
     if tex.starts_with('-') {
-        return Err(format!("{tex} can't be compiled: its name starts with a hyphen. Rename the file."));
+        return Err(format!(
+            "{tex} can't be compiled: its name starts with a hyphen. Rename the file."
+        ));
     }
     Ok(())
 }
@@ -229,11 +237,24 @@ fn output_with_timeout(
             buf
         })
     };
-    let stdout = drain(child.stdout.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
-    let stderr = drain(child.stderr.take().map(|p| Box::new(p) as Box<dyn Read + Send>));
+    let stdout = drain(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
+    let stderr = drain(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn Read + Send>),
+    );
     let start = std::time::Instant::now();
     let status = loop {
-        if let Some(status) = child.try_wait().map_err(|e| RunError::Spawn(e.to_string()))? {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|e| RunError::Spawn(e.to_string()))?
+        {
             break status;
         }
         if start.elapsed() > timeout {
@@ -294,14 +315,18 @@ fn search_path(var: &str, main_dir: &std::path::Path) -> String {
 fn prepare_build_dir(dir: &std::path::Path, main_tex: &str) -> std::io::Result<()> {
     let build = dir.join("build");
     fs::create_dir_all(&build)?;
-    let main_dir = std::path::Path::new(main_tex).parent().unwrap_or(std::path::Path::new(""));
+    let main_dir = std::path::Path::new(main_tex)
+        .parent()
+        .unwrap_or(std::path::Path::new(""));
     let mut folders = Vec::new();
     let mut pending = vec![std::path::PathBuf::new()];
     while let Some(rel) = pending.pop() {
         if folders.len() >= 1000 {
             break;
         }
-        let Ok(entries) = fs::read_dir(dir.join(&rel)) else { continue };
+        let Ok(entries) = fs::read_dir(dir.join(&rel)) else {
+            continue;
+        };
         let mut has_tex = false;
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
@@ -339,7 +364,9 @@ fn latexmk_command(dir: &std::path::Path, main_tex: &str, engine: profile::Engin
     for rc in trusted_latexmk_rc_files() {
         command.arg("-r").arg(rc);
     }
-    let main_dir = std::path::Path::new(main_tex).parent().unwrap_or(std::path::Path::new(""));
+    let main_dir = std::path::Path::new(main_tex)
+        .parent()
+        .unwrap_or(std::path::Path::new(""));
     if !main_dir.as_os_str().is_empty() {
         for var in ["TEXINPUTS", "BIBINPUTS", "BSTINPUTS"] {
             command.env(var, search_path(var, main_dir));
@@ -443,16 +470,20 @@ fn create_project(
     template_id: String,
 ) -> Result<ProjectInfo, String> {
     validate_project_name(&name)?;
-    let template = templates::find(&template_id)
-        .ok_or_else(|| format!("unknown template: {template_id}"))?;
+    let template =
+        templates::find(&template_id).ok_or_else(|| format!("unknown template: {template_id}"))?;
     let name = name.trim().to_string();
     let cfg = settings::effective(&app)?;
-    let root = cfg.projects_root.expect("projects root is set by effective()");
+    let root = cfg
+        .projects_root
+        .expect("projects root is set by effective()");
     fs::create_dir_all(&root)
         .map_err(|e| errors::failed("Could not create the projects folder", &e))?;
     let dir = std::path::Path::new(&root).join(&name);
     if dir.exists() {
-        return Err(format!("A project named “{name}” already exists. Choose another name."));
+        return Err(format!(
+            "A project named “{name}” already exists. Choose another name."
+        ));
     }
     fs::create_dir_all(&dir)
         .map_err(|e| errors::failed("Could not create the project folder", &e))?;
@@ -503,7 +534,8 @@ async fn open_project_dialog(app: tauri::AppHandle) -> Result<Option<ProjectInfo
         return Ok(None);
     };
     let path = picked.into_path().map_err(|e| e.to_string())?;
-    let dir = fs::canonicalize(&path).map_err(|e| errors::failed("Could not open the folder", &e))?;
+    let dir =
+        fs::canonicalize(&path).map_err(|e| errors::failed("Could not open the folder", &e))?;
     admit_project(&app, &dir).map(Some)
 }
 
@@ -513,7 +545,7 @@ fn admit_project(app: &tauri::AppHandle, dir: &std::path::Path) -> Result<Projec
     }
     guard::allow(dir);
     let info = project_info(dir);
-    settings::update(&app, |s| {
+    settings::update(app, |s| {
         settings::upsert_recent(s, &info.name, &info.path);
         s.last_project_path = Some(info.path.clone());
     })?;
@@ -528,6 +560,8 @@ fn remove_recent_project(app: tauri::AppHandle, path: String) -> Result<Settings
     })
 }
 
+// The front end sends each setting as its own argument.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 fn update_preferences(
     app: tauri::AppHandle,
@@ -642,7 +676,9 @@ async fn pick_bib_source(app: tauri::AppHandle, folder: bool) -> Result<Option<S
     use tauri_plugin_dialog::DialogExt;
     let dialog = app.dialog().file();
     let picked = if folder {
-        dialog.set_title("Add a folder of .bib files").blocking_pick_folder()
+        dialog
+            .set_title("Add a folder of .bib files")
+            .blocking_pick_folder()
     } else {
         dialog
             .set_title("Add a .bib file")
@@ -653,7 +689,8 @@ async fn pick_bib_source(app: tauri::AppHandle, folder: bool) -> Result<Option<S
         return Ok(None);
     };
     let path = picked.into_path().map_err(|e| e.to_string())?;
-    let path = fs::canonicalize(&path).map_err(|e| errors::failed("Could not add the source", &e))?;
+    let path =
+        fs::canonicalize(&path).map_err(|e| errors::failed("Could not add the source", &e))?;
     if !folder && !files::is_bib(&path) {
         return Err("That isn't a .bib file. Choose a file that ends in .bib.".into());
     }
@@ -749,9 +786,20 @@ async fn check_grammar(
     blocks: Vec<String>,
 ) -> Result<Vec<Vec<grammar::GrammarIssue>>, grammar::GrammarError> {
     let cfg = settings::snapshot(&app)?;
-    let language = cfg.spellcheck_language.clone().unwrap_or_else(|| "en".into());
-    let variant = cfg.grammar.english_variant.clone().unwrap_or_else(|| "en-US".into());
-    let lt_language = if language == "en" { variant.clone() } else { language.clone() };
+    let language = cfg
+        .spellcheck_language
+        .clone()
+        .unwrap_or_else(|| "en".into());
+    let variant = cfg
+        .grammar
+        .english_variant
+        .clone()
+        .unwrap_or_else(|| "en-US".into());
+    let lt_language = if language == "en" {
+        variant.clone()
+    } else {
+        language.clone()
+    };
     let disabled = &cfg.grammar.disabled_rules;
     match grammar::provider(&cfg.grammar) {
         grammar::Provider::Polemic => {
@@ -764,7 +812,8 @@ async fn check_grammar(
                 bearer: Some(&token),
                 max_chars: grammar::POLEMIC_MAX_CHARS,
             };
-            let result = grammar::check_languagetool(&endpoint, &lt_language, &blocks, disabled).await;
+            let result =
+                grammar::check_languagetool(&endpoint, &lt_language, &blocks, disabled).await;
             if matches!(&result, Err(e) if e.kind == grammar::GrammarErrorKind::SignedOut) {
                 account::forget_rejected_with(&server, &token, &account::STORE);
             }
@@ -785,7 +834,10 @@ async fn check_grammar(
     }
     let mut guard = harper.0.lock().map_err(|e| e.to_string())?;
     if guard.as_ref().is_none_or(|(v, _)| *v != variant) {
-        *guard = Some((variant.clone(), grammar::Harper::new(grammar::dialect_for(&variant))));
+        *guard = Some((
+            variant.clone(),
+            grammar::Harper::new(grammar::dialect_for(&variant)),
+        ));
     }
     let (_, checker) = guard.as_mut().expect("set above");
     Ok(checker.check(&blocks, disabled))
@@ -793,10 +845,15 @@ async fn check_grammar(
 
 /// Harper's rules with descriptions, for switching them off.
 #[tauri::command]
-fn grammar_rules(harper: tauri::State<'_, HarperState>) -> Result<Vec<grammar::GrammarRule>, String> {
+fn grammar_rules(
+    harper: tauri::State<'_, HarperState>,
+) -> Result<Vec<grammar::GrammarRule>, String> {
     let mut guard = harper.0.lock().map_err(|e| e.to_string())?;
     if guard.is_none() {
-        *guard = Some(("en-US".into(), grammar::Harper::new(grammar::dialect_for("en-US"))));
+        *guard = Some((
+            "en-US".into(),
+            grammar::Harper::new(grammar::dialect_for("en-US")),
+        ));
     }
     Ok(guard.as_ref().expect("set above").1.rules())
 }
@@ -875,7 +932,8 @@ fn spelling_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
         .app_data_dir()
         .map_err(|_| "Polemic could not find its data folder on this computer.".to_string())?
         .join("spelling");
-    fs::create_dir_all(&dir).map_err(|e| errors::failed("Could not create the folder for dictionaries", &e))?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| errors::failed("Could not create the folder for dictionaries", &e))?;
     Ok(dir)
 }
 
@@ -888,8 +946,9 @@ fn load_language_wordlist(
         return Ok(spell::SpellState::new(user_words));
     }
     let file = spelling_dir(app)?.join(format!("{lang}.txt"));
-    let content = fs::read_to_string(&file)
-        .map_err(|_| format!("The dictionary for “{lang}” isn't downloaded yet. Download it in Settings."))?;
+    let content = fs::read_to_string(&file).map_err(|_| {
+        format!("The dictionary for “{lang}” isn't downloaded yet. Download it in Settings.")
+    })?;
     Ok(spell::SpellState::from_words(
         spell::parse_frequency_list(&content),
         user_words,
@@ -904,7 +963,9 @@ fn list_spellcheck_languages(app: tauri::AppHandle) -> Result<Vec<String>, Strin
             for entry in read.filter_map(Result::ok) {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if let Some(lang) = name.strip_suffix(".txt") {
-                    if DOWNLOADABLE_LANGUAGES.contains(&lang) && !languages.iter().any(|l| l == lang) {
+                    if DOWNLOADABLE_LANGUAGES.contains(&lang)
+                        && !languages.iter().any(|l| l == lang)
+                    {
                         languages.push(lang.to_string());
                     }
                 }
@@ -966,7 +1027,11 @@ fn set_spellcheck_language_inner(
 }
 
 #[tauri::command]
-fn set_pinned_project(app: tauri::AppHandle, path: String, pinned: bool) -> Result<Settings, String> {
+fn set_pinned_project(
+    app: tauri::AppHandle,
+    path: String,
+    pinned: bool,
+) -> Result<Settings, String> {
     settings::update(&app, |s| {
         s.pinned_projects.retain(|p| p != &path);
         if pinned {
@@ -1089,7 +1154,8 @@ fn read_project_file(project_dir: String, path: String) -> Result<String, String
 fn write_project_file(project_dir: String, path: String, content: String) -> Result<(), String> {
     let target = project_file(&project_dir, &path)?;
     if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|e| errors::failed("Could not create the folder", &e))?;
+        fs::create_dir_all(parent)
+            .map_err(|e| errors::failed("Could not create the folder", &e))?;
     }
     fs::write(&target, content)
         .map_err(|e| errors::failed(format_args!("Could not save {path}"), &e))
@@ -1105,7 +1171,8 @@ fn create_project_entry(project_dir: String, path: String, is_dir: bool) -> Resu
         fs::create_dir_all(&target).map_err(|e| errors::failed("Could not create the folder", &e))
     } else {
         if let Some(parent) = target.parent() {
-            fs::create_dir_all(parent).map_err(|e| errors::failed("Could not create the folder", &e))?;
+            fs::create_dir_all(parent)
+                .map_err(|e| errors::failed("Could not create the folder", &e))?;
         }
         fs::write(&target, "")
             .map_err(|e| errors::failed(format_args!("Could not create {path}"), &e))
@@ -1119,8 +1186,7 @@ fn rename_entry(project_dir: String, path: String, new_path: String) -> Result<(
     if to.exists() {
         return Err(format!("{new_path} already exists. Choose another name."));
     }
-    fs::rename(&from, &to)
-        .map_err(|e| errors::failed(format_args!("Could not rename {path}"), &e))
+    fs::rename(&from, &to).map_err(|e| errors::failed(format_args!("Could not rename {path}"), &e))
 }
 
 /// Move a project file or folder to the OS trash (recoverable, like
@@ -1137,8 +1203,8 @@ fn delete_entry(project_dir: String, path: String) -> Result<(), String> {
 #[tauri::command]
 fn read_asset(project_dir: String, path: String) -> Result<tauri::ipc::Response, String> {
     let target = project_file(&project_dir, &path)?;
-    let bytes = fs::read(&target)
-        .map_err(|e| errors::failed(format_args!("Could not open {path}"), &e))?;
+    let bytes =
+        fs::read(&target).map_err(|e| errors::failed(format_args!("Could not open {path}"), &e))?;
     Ok(tauri::ipc::Response::new(bytes))
 }
 
@@ -1164,7 +1230,13 @@ fn import_assets(project_dir: String, sources: Vec<String>) -> Result<Vec<String
         // Already in the project: no copy, just resolve the path.
         if from.strip_prefix(&dir).is_ok() {
             let usable = usable_graphic(&from, false);
-            imported.push(usable.strip_prefix(&dir).unwrap().to_string_lossy().to_string());
+            imported.push(
+                usable
+                    .strip_prefix(&dir)
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string(),
+            );
             continue;
         }
         let name = from
@@ -1304,11 +1376,13 @@ async fn compile_project(
 ) -> Result<CompileOutcome, cloud_compile::CompileError> {
     let dir = canonical_project(&project_dir)?;
     validate_tex_arg(&project_dir, &main_tex)?;
-    let main_source = fs::read_to_string(project_file(&project_dir, &main_tex)?)
-        .unwrap_or_default();
+    let main_source =
+        fs::read_to_string(project_file(&project_dir, &main_tex)?).unwrap_or_default();
     // The engine guess also reads the project's own .cls, .sty and latexmkrc files.
     let read = |rel: &str| {
-        files::resolve_in_project(&project_dir, rel).ok().and_then(|path| fs::read_to_string(path).ok())
+        files::resolve_in_project(&project_dir, rel)
+            .ok()
+            .and_then(|path| fs::read_to_string(path).ok())
     };
     let engine = profile::resolve_in_project(&profile::load(&dir), &main_tex, &main_source, &read);
     if settings::snapshot(&app)?.compile_provider.as_deref() == Some("polemic") {
@@ -1409,7 +1483,9 @@ fn set_compile_provider(app: tauri::AppHandle, provider: String) -> Result<Setti
 
 /// Whether the account can compile with Polemic, for Settings.
 #[tauri::command]
-async fn cloud_compile_status(app: tauri::AppHandle) -> Result<cloud_compile::Availability, String> {
+async fn cloud_compile_status(
+    app: tauri::AppHandle,
+) -> Result<cloud_compile::Availability, String> {
     let server = account::server_of(&app)?;
     let Some(token) = account::token_with(&server, &account::STORE) else {
         return Ok(cloud_compile::Availability::SignedOut);
@@ -1434,8 +1510,8 @@ fn save_project_config(project_dir: String, config: profile::ProjectConfig) -> R
 fn get_pdf(project_dir: String, main_tex: String) -> Result<tauri::ipc::Response, String> {
     let dir = canonical_project(&project_dir)?;
     let pdf_path = dir.join("build").join(pdf_output_path(&main_tex));
-    let pdf = fs::read(&pdf_path)
-        .map_err(|_| "No PDF yet. Compile the project first.".to_string())?;
+    let pdf =
+        fs::read(&pdf_path).map_err(|_| "No PDF yet. Compile the project first.".to_string())?;
     Ok(tauri::ipc::Response::new(pdf))
 }
 
@@ -1447,11 +1523,11 @@ fn export_pdf(project_dir: String, main_tex: String, dest_path: String) -> Resul
     fs::copy(&pdf_path, std::path::Path::new(&dest_path))
         .map(|_| ())
         .map_err(|e| {
-        format!(
-            "failed to copy PDF to {}: {e}",
-            std::path::Path::new(&dest_path).display()
-        )
-    })
+            format!(
+                "failed to copy PDF to {}: {e}",
+                std::path::Path::new(&dest_path).display()
+            )
+        })
 }
 
 /// Open the built PDF in the system viewer.
@@ -1506,7 +1582,7 @@ fn synctex_forward(
     let mut y: Option<f64> = None;
     for line in text.lines() {
         let line = line.trim();
-        if let (None, Some(value)) = (page.clone(), line.strip_prefix("Page:")) {
+        if let (None, Some(value)) = (page, line.strip_prefix("Page:")) {
             page = value.trim().parse().ok();
         } else if let (None, Some(value)) = (x, line.strip_prefix("x:")) {
             x = value.trim().parse().ok();
@@ -1567,7 +1643,12 @@ fn synctex_backward(
     // A compile with Polemic records project-relative names.
     let rel = fs::canonicalize(dir.join(&file))
         .ok()
-        .and_then(|canon| canon.strip_prefix(&dir).ok().map(|p| p.to_string_lossy().to_string()))
+        .and_then(|canon| {
+            canon
+                .strip_prefix(&dir)
+                .ok()
+                .map(|p| p.to_string_lossy().to_string())
+        })
         .or_else(|| {
             let prefix = format!("{}/./", dir.to_string_lossy());
             file.strip_prefix(&prefix).map(|p| p.to_string())
@@ -1612,11 +1693,7 @@ fn read_snapshot_file(project_dir: String, id: String, path: String) -> Result<S
 }
 
 #[tauri::command]
-fn restore_snapshot_file(
-    project_dir: String,
-    id: String,
-    path: String,
-) -> Result<(), String> {
+fn restore_snapshot_file(project_dir: String, id: String, path: String) -> Result<(), String> {
     let dir = canonical_project(&project_dir)?;
     snapshots::restore_file(&dir, &id, &path)
 }
@@ -1629,10 +1706,7 @@ fn list_comments(project_dir: String) -> Result<Vec<comments::Comment>, String> 
 }
 
 #[tauri::command]
-fn save_comments(
-    project_dir: String,
-    comments: Vec<comments::Comment>,
-) -> Result<(), String> {
+fn save_comments(project_dir: String, comments: Vec<comments::Comment>) -> Result<(), String> {
     comments::save(&canonical_project(&project_dir)?, &comments)
 }
 
@@ -1744,7 +1818,8 @@ fn oauth_secret(tokens: &hosting::Tokens, previous_refresh: &str) -> git_account
             .refresh_token
             .clone()
             .unwrap_or_else(|| previous_refresh.to_string()),
-        expires_at: git_accounts::now_secs() + tokens.expires_in.unwrap_or(gitlab::DEFAULT_LIFETIME),
+        expires_at: git_accounts::now_secs()
+            + tokens.expires_in.unwrap_or(gitlab::DEFAULT_LIFETIME),
     })
 }
 
@@ -1859,7 +1934,12 @@ fn save_git_account(
         git_accounts::set_secret_with(&git_accounts::STORE, &id, &secret)?;
     }
     settings::update(app, |s| {
-        let account = settings::GitAccount { id: id.clone(), host, username, name };
+        let account = settings::GitAccount {
+            id: id.clone(),
+            host,
+            username,
+            name,
+        };
         match s.git_accounts.iter_mut().find(|a| a.id == id) {
             Some(slot) => *slot = account,
             None => s.git_accounts.push(account),
@@ -1897,13 +1977,22 @@ impl Hosting {
             Hosting::Github => github::client_id(),
             Hosting::Gitlab => gitlab::client_id(),
         }
-        .ok_or_else(|| format!("{} sign-in isn't available in this version of Polemic. Add a token instead.", self.name()))
+        .ok_or_else(|| {
+            format!(
+                "{} sign-in isn't available in this version of Polemic. Add a token instead.",
+                self.name()
+            )
+        })
     }
 }
 
 /// The device code waiting to be entered, its host, and its cancel flag.
 static SIGN_IN_PENDING: std::sync::Mutex<
-    Option<(Hosting, hosting::DeviceCode, std::sync::Arc<std::sync::atomic::AtomicBool>)>,
+    Option<(
+        Hosting,
+        hosting::DeviceCode,
+        std::sync::Arc<std::sync::atomic::AtomicBool>,
+    )>,
 > = std::sync::Mutex::new(None);
 
 #[derive(serde::Serialize)]
@@ -1960,9 +2049,17 @@ async fn hosting_sign_in_finish(
         .lock()
         .map_err(|e| e.to_string())?
         .clone()
-        .ok_or_else(|| format!("No {} sign-in is waiting. Start the sign-in again.", provider.name()))?;
+        .ok_or_else(|| {
+            format!(
+                "No {} sign-in is waiting. Start the sign-in again.",
+                provider.name()
+            )
+        })?;
     if pending_for != provider {
-        return Err(format!("No {} sign-in is waiting. Start the sign-in again.", provider.name()));
+        return Err(format!(
+            "No {} sign-in is waiting. Start the sign-in again.",
+            provider.name()
+        ));
     }
     let unit = std::time::Duration::from_secs(1);
     let result = match provider {
@@ -1974,21 +2071,35 @@ async fn hosting_sign_in_finish(
             unit,
         )
         .await
-        .map(|token| hosting::Tokens { access_token: token, refresh_token: None, expires_in: None }),
+        .map(|token| hosting::Tokens {
+            access_token: token,
+            refresh_token: None,
+            expires_in: None,
+        }),
         Hosting::Gitlab => {
-            gitlab::wait_for_tokens(&gitlab::Endpoints::default(), &client_id, &code, cancel.clone(), unit)
-                .await
+            gitlab::wait_for_tokens(
+                &gitlab::Endpoints::default(),
+                &client_id,
+                &code,
+                cancel.clone(),
+                unit,
+            )
+            .await
         }
     };
     if let Ok(mut pending) = SIGN_IN_PENDING.lock() {
-        if pending.as_ref().is_some_and(|(_, _, c)| std::sync::Arc::ptr_eq(c, &cancel)) {
+        if pending
+            .as_ref()
+            .is_some_and(|(_, _, c)| std::sync::Arc::ptr_eq(c, &cancel))
+        {
             *pending = None;
         }
     }
     let tokens = result?;
     match provider {
         Hosting::Github => {
-            let login = github::login_of(&github::Endpoints::default(), &tokens.access_token).await?;
+            let login =
+                github::login_of(&github::Endpoints::default(), &tokens.access_token).await?;
             let secret = git_accounts::Secret::Token(tokens.access_token);
             save_git_account(&app, None, github::HOST.into(), login, None, Some(secret))?;
         }
@@ -2043,17 +2154,34 @@ async fn hosting_publish(
                 p = provider.name()
             )
         })?;
-    let (username, token) = account_credentials(account)
-        .await?
-        .ok_or_else(|| format!("The {} account has no token. Sign in again or add a token.", provider.name()))?;
+    let (username, token) = account_credentials(account).await?.ok_or_else(|| {
+        format!(
+            "The {} account has no token. Sign in again or add a token.",
+            provider.name()
+        )
+    })?;
     match provider {
         Hosting::Github => {
-            github::publish_with(&github::Endpoints::default(), &dir, &username, &token, &name, private)
-                .await
+            github::publish_with(
+                &github::Endpoints::default(),
+                &dir,
+                &username,
+                &token,
+                &name,
+                private,
+            )
+            .await
         }
         Hosting::Gitlab => {
-            gitlab::publish_with(&gitlab::Endpoints::default(), &dir, &username, &token, &name, private)
-                .await
+            gitlab::publish_with(
+                &gitlab::Endpoints::default(),
+                &dir,
+                &username,
+                &token,
+                &name,
+                private,
+            )
+            .await
         }
     }
 }
@@ -2078,17 +2206,22 @@ async fn git_clone_project(
     validate_project_name(&name)?;
     let name = name.trim().to_string();
     let cfg = settings::effective(&app)?;
-    let root = cfg.projects_root.expect("projects root is set by effective()");
+    let root = cfg
+        .projects_root
+        .expect("projects root is set by effective()");
     let dest = std::path::Path::new(&root).join(&name);
     if dest.exists() {
-        return Err(format!("A project named “{name}” already exists. Choose another name."));
+        return Err(format!(
+            "A project named “{name}” already exists. Choose another name."
+        ));
     }
     let clone_dest = dest.clone();
     let credentials = git_credentials(&app, &url).await?;
     tauri::async_runtime::spawn_blocking(move || git::clone(&url, &clone_dest, credentials))
         .await
         .map_err(|e| e.to_string())??;
-    let dir = fs::canonicalize(&dest).map_err(|e| errors::failed("Could not open the cloned project", &e))?;
+    let dir = fs::canonicalize(&dest)
+        .map_err(|e| errors::failed("Could not open the cloned project", &e))?;
     admit_project(&app, &dir)
 }
 
@@ -2129,7 +2262,7 @@ pub struct TexPackageInfo {
 /// for seconds).
 #[tauri::command]
 async fn tex_package_info(names: Vec<String>) -> Result<Vec<TexPackageInfo>, String> {
-    Ok(tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || {
         names
             .iter()
             .map(|name| {
@@ -2161,7 +2294,7 @@ async fn tex_package_info(names: Vec<String>) -> Result<Vec<TexPackageInfo>, Str
             .collect::<Vec<TexPackageInfo>>()
     })
     .await
-    .map_err(|e| e.to_string())?)
+    .map_err(|e| e.to_string())
 }
 
 // --- misc ------------------------------------------------------------------
@@ -2216,8 +2349,13 @@ const PROJECT_MENU_ITEMS: [&str; 30] = [
 
 /// Project items beyond the fixed-size list above (kept separate so the
 /// array length stays readable).
-const PROJECT_MENU_ITEMS_MORE: [&str; 5] =
-    ["sources", "take_snapshot", "commit", "toggle_comment", "share"];
+const PROJECT_MENU_ITEMS_MORE: [&str; 5] = [
+    "sources",
+    "take_snapshot",
+    "commit",
+    "toggle_comment",
+    "share",
+];
 
 /// Menu item id → the frontend event it emits.
 const MENU_EVENTS: [(&str, &str); 43] = [
@@ -2290,7 +2428,10 @@ fn find_menu_item(
 }
 
 /// Enable or disable a plain or check item.
-fn set_item_enabled(item: &tauri::menu::MenuItemKind<tauri::Wry>, enabled: bool) -> tauri::Result<()> {
+fn set_item_enabled(
+    item: &tauri::menu::MenuItemKind<tauri::Wry>,
+    enabled: bool,
+) -> tauri::Result<()> {
     match item {
         tauri::menu::MenuItemKind::MenuItem(item) => item.set_enabled(enabled),
         tauri::menu::MenuItemKind::Check(item) => item.set_enabled(enabled),
@@ -2300,15 +2441,15 @@ fn set_item_enabled(item: &tauri::menu::MenuItemKind<tauri::Wry>, enabled: bool)
 
 /// Enable or disable the menu items that need an open project.
 #[tauri::command]
-fn set_project_menu_enabled(
-    state: tauri::State<MenuState>,
-    enabled: bool,
-) -> Result<(), String> {
+fn set_project_menu_enabled(state: tauri::State<MenuState>, enabled: bool) -> Result<(), String> {
     let guard = state.0.lock().map_err(|e| e.to_string())?;
     let Some(menu) = guard.as_ref() else {
         return Ok(());
     };
-    for id in PROJECT_MENU_ITEMS.iter().chain(PROJECT_MENU_ITEMS_MORE.iter()) {
+    for id in PROJECT_MENU_ITEMS
+        .iter()
+        .chain(PROJECT_MENU_ITEMS_MORE.iter())
+    {
         if let Some(item) = find_menu_item(menu, id) {
             set_item_enabled(&item, enabled)
                 .map_err(|e| format!("failed to update menu item {id}: {e}"))?;
@@ -2359,7 +2500,11 @@ fn build_app_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let save = item("save", "Save", Some("CmdOrCtrl+S"))?;
     let compile = item("compile", "Compile", Some("CmdOrCtrl+Shift+R"))?;
     let export_pdf = item("export_pdf", "Export PDF…", Some("CmdOrCtrl+E"))?;
-    let reveal_build = item("reveal_build", "Reveal build folder", Some("CmdOrCtrl+Shift+E"))?;
+    let reveal_build = item(
+        "reveal_build",
+        "Reveal build folder",
+        Some("CmdOrCtrl+Shift+E"),
+    )?;
     let close_project = item("close_project", "Close project", Some("CmdOrCtrl+Shift+W"))?;
 
     // Edit (after the predefined clipboard items)
@@ -2383,7 +2528,12 @@ fn build_app_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let face_code = check("face_code", "Code", true, Some("CmdOrCtrl+Alt+1"))?;
     let face_visual = check("face_visual", "Visual", false, Some("CmdOrCtrl+Alt+2"))?;
     let toggle_sidebar = check("toggle_sidebar", "Navigator", true, Some("CmdOrCtrl+Alt+B"))?;
-    let toggle_preview = check("toggle_preview", "PDF Preview", true, Some("CmdOrCtrl+Shift+P"))?;
+    let toggle_preview = check(
+        "toggle_preview",
+        "PDF Preview",
+        true,
+        Some("CmdOrCtrl+Shift+P"),
+    )?;
     let toggle_right = check("toggle_right", "Properties", false, Some("CmdOrCtrl+J"))?;
     let issues = check("issues", "Issues", true, Some("CmdOrCtrl+Shift+M"))?;
     let log = check("log", "Compile Log", false, None)?;
@@ -2556,7 +2706,10 @@ fn build_app_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Keep the menu so menu items can be enabled/disabled at runtime.
     // Start with project items disabled; the frontend enables them on open.
-    for id in PROJECT_MENU_ITEMS.iter().chain(PROJECT_MENU_ITEMS_MORE.iter()) {
+    for id in PROJECT_MENU_ITEMS
+        .iter()
+        .chain(PROJECT_MENU_ITEMS_MORE.iter())
+    {
         if let Some(item) = find_menu_item(&menu, id) {
             let _ = set_item_enabled(&item, false);
         }
@@ -2607,14 +2760,9 @@ fn show_context_menu(
         match item {
             ContextMenuItem::Separator => builder = builder.separator(),
             ContextMenuItem::Item { id, text } => {
-                let menu_item = MenuItem::with_id(
-                    &app,
-                    format!("ctx/{id}"),
-                    text,
-                    true,
-                    Option::<&str>::None,
-                )
-                .map_err(|e| e.to_string())?;
+                let menu_item =
+                    MenuItem::with_id(&app, format!("ctx/{id}"), text, true, Option::<&str>::None)
+                        .map_err(|e| e.to_string())?;
                 builder = builder.item(&menu_item);
             }
         }
@@ -2671,7 +2819,8 @@ fn create_main_window(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {    tauri::Builder::default()
+pub fn run() {
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -2695,7 +2844,9 @@ pub fn run() {    tauri::Builder::default()
                 app.deep_link()
                     .on_open_url(move |event| link::open_from_links(&handle, &event.urls()));
             }
-            app.manage(SettingsState(std::sync::Mutex::new(settings::load(app.handle()))));
+            app.manage(SettingsState(std::sync::Mutex::new(settings::load(
+                app.handle(),
+            ))));
             let (user_words, lang) = {
                 let settings_state = app.state::<SettingsState>();
                 let guard = settings_state.0.lock().map_err(|e| e.to_string())?;
@@ -2707,9 +2858,8 @@ pub fn run() {    tauri::Builder::default()
                         .unwrap_or_else(|| "en".into()),
                 )
             };
-            let spell_state =
-                load_language_wordlist(app.handle(), &lang, &user_words)
-                    .unwrap_or_else(|_| spell::SpellState::new(&user_words));
+            let spell_state = load_language_wordlist(app.handle(), &lang, &user_words)
+                .unwrap_or_else(|_| spell::SpellState::new(&user_words));
             app.manage(std::sync::Mutex::new(spell_state));
             app.manage(MenuState(std::sync::Mutex::new(None)));
             app.manage(HarperState(std::sync::Mutex::new(None)));
@@ -2866,7 +3016,10 @@ mod tests {
     fn rejects_tex_args_that_read_as_options() {
         let tmp = fs::canonicalize(std::env::temp_dir()).unwrap();
         let dir = tmp.to_string_lossy().to_string();
-        assert!(validate_tex_arg(&dir, "chapters/intro.tex").is_err(), "not an open project");
+        assert!(
+            validate_tex_arg(&dir, "chapters/intro.tex").is_err(),
+            "not an open project"
+        );
         guard::allow(&tmp);
         assert!(validate_tex_arg(&dir, "-pdflatex=evil.tex").is_err());
         assert!(validate_tex_arg(&dir, "../main.tex").is_err());
@@ -2891,8 +3044,12 @@ mod tests {
         let rc = "system(\"touch PWNED\");\n";
         fs::write(dir.join("latexmkrc"), rc).unwrap();
         fs::write(dir.join(".latexmkrc"), rc).unwrap();
-        let output =
-            output_with_timeout(latexmk_command(&dir, "main.tex", profile::Engine::Pdflatex), COMPILE_TIMEOUT).ok().unwrap();
+        let output = output_with_timeout(
+            latexmk_command(&dir, "main.tex", profile::Engine::Pdflatex),
+            COMPILE_TIMEOUT,
+        )
+        .ok()
+        .unwrap();
         assert!(!dir.join("PWNED").exists(), "the project's latexmkrc ran");
         if Command::new("pdflatex").arg("--version").output().is_ok() {
             assert!(output.status.success());
@@ -2931,7 +3088,11 @@ mod tests {
         )
         .ok()
         .unwrap();
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
         assert!(dir.join("build/thesis.pdf").is_file());
         assert!(dir.join("build/chapters/intro.aux").is_file());
         let _ = fs::remove_dir_all(&dir);
@@ -2953,8 +3114,14 @@ mod tests {
         let engine = profile::resolve(&profile::load(&dir), source);
         assert_eq!(engine, profile::Engine::Xelatex);
         let output =
-            output_with_timeout(latexmk_command(&dir, "main.tex", engine), COMPILE_TIMEOUT).ok().unwrap();
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stdout));
+            output_with_timeout(latexmk_command(&dir, "main.tex", engine), COMPILE_TIMEOUT)
+                .ok()
+                .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
         assert!(dir.join("build/main.pdf").is_file());
         let _ = fs::remove_dir_all(&dir);
     }
@@ -2972,7 +3139,11 @@ mod tests {
         let result = output_with_timeout(slow, std::time::Duration::from_millis(300));
         assert!(matches!(result, Err(RunError::TimedOut)));
         assert!(start.elapsed() < std::time::Duration::from_secs(5));
-        let grandchild: libc::pid_t = fs::read_to_string(&pid_file).unwrap().trim().parse().unwrap();
+        let grandchild: libc::pid_t = fs::read_to_string(&pid_file)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
         let _ = fs::remove_file(&pid_file);
         std::thread::sleep(std::time::Duration::from_millis(100));
         // Gone, or a zombie waiting to be reaped (no init in containers).
@@ -2986,7 +3157,9 @@ mod tests {
 
         let mut quick = Command::new("sh");
         quick.args(["-c", "echo out; echo err >&2"]);
-        let output = output_with_timeout(quick, std::time::Duration::from_secs(5)).ok().unwrap();
+        let output = output_with_timeout(quick, std::time::Duration::from_secs(5))
+            .ok()
+            .unwrap();
         assert_eq!(String::from_utf8_lossy(&output.stdout), "out\n");
         assert_eq!(String::from_utf8_lossy(&output.stderr), "err\n");
     }

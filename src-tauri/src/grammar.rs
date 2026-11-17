@@ -108,19 +108,22 @@ impl Harper {
                         else {
                             continue;
                         };
-                        let original: String =
-                            text.chars().skip(lint.span.start).take(lint.span.end - lint.span.start).collect();
+                        let original: String = text
+                            .chars()
+                            .skip(lint.span.start)
+                            .take(lint.span.end - lint.span.start)
+                            .collect();
                         let replacements = lint
                             .suggestions
                             .iter()
-                            .filter_map(|s| match s {
+                            .map(|s| match s {
                                 harper_core::linting::Suggestion::ReplaceWith(chars) => {
-                                    Some(chars.iter().collect())
+                                    chars.iter().collect()
                                 }
                                 harper_core::linting::Suggestion::InsertAfter(chars) => {
-                                    Some(format!("{original}{}", chars.iter().collect::<String>()))
+                                    format!("{original}{}", chars.iter().collect::<String>())
                                 }
-                                harper_core::linting::Suggestion::Remove => Some(String::new()),
+                                harper_core::linting::Suggestion::Remove => String::new(),
                             })
                             .collect();
                         issues.push(GrammarIssue {
@@ -203,7 +206,11 @@ fn join_blocks(blocks: &[String]) -> (String, Vec<usize>) {
 
 /// Split LanguageTool matches (offsets in the joined text, UTF-16, as
 /// Java counts) back into per-block issues.
-fn split_matches(matches: Vec<LtMatch>, blocks: &[String], starts: &[usize]) -> Vec<Vec<GrammarIssue>> {
+fn split_matches(
+    matches: Vec<LtMatch>,
+    blocks: &[String],
+    starts: &[usize],
+) -> Vec<Vec<GrammarIssue>> {
     let mut out: Vec<Vec<GrammarIssue>> = vec![Vec::new(); blocks.len()];
     for m in matches {
         let Some(index) = starts.iter().rposition(|&start| start <= m.offset) else {
@@ -220,7 +227,12 @@ fn split_matches(matches: Vec<LtMatch>, blocks: &[String], starts: &[usize]) -> 
             message: m.message,
             rule: m.rule.id,
             category: m.rule.category.name,
-            replacements: m.replacements.into_iter().take(5).map(|r| r.value).collect(),
+            replacements: m
+                .replacements
+                .into_iter()
+                .take(5)
+                .map(|r| r.value)
+                .collect(),
         });
     }
     out
@@ -331,7 +343,10 @@ fn backoff_remaining(base_url: &str) -> Option<u64> {
 
 fn back_off(base_url: &str, seconds: u64) {
     if let Ok(mut guard) = BACKOFF.lock() {
-        *guard = Some((base_url.to_string(), Instant::now() + Duration::from_secs(seconds)));
+        *guard = Some((
+            base_url.to_string(),
+            Instant::now() + Duration::from_secs(seconds),
+        ));
     }
 }
 
@@ -367,10 +382,9 @@ fn error_for(status: u16, retry_after: Option<&str>, body: &str, polemic: bool) 
             PlanRequired,
             "Grammar checking with Polemic needs a paid plan on this server.",
         ),
-        404 if polemic => GrammarError::new(
-            Unavailable,
-            "This Polemic server has no grammar checking.",
-        ),
+        404 if polemic => {
+            GrammarError::new(Unavailable, "This Polemic server has no grammar checking.")
+        }
         413 => GrammarError::new(TooLong, "A paragraph is too long to check."),
         429 => rate_limited(
             retry_after
@@ -384,7 +398,10 @@ fn error_for(status: u16, retry_after: Option<&str>, body: &str, polemic: bool) 
             let message = if text.is_empty() || text.starts_with('<') || text.starts_with('{') {
                 format!("LanguageTool answered {status}")
             } else {
-                format!("LanguageTool: {}", text.chars().take(300).collect::<String>())
+                format!(
+                    "LanguageTool: {}",
+                    text.chars().take(300).collect::<String>()
+                )
             };
             GrammarError::new(Failed, message)
         }
@@ -404,7 +421,11 @@ fn chunk_blocks(blocks: &[String], max: usize) -> Vec<Vec<usize>> {
         if size > max {
             continue;
         }
-        let added = if current.is_empty() { size } else { separator + size };
+        let added = if current.is_empty() {
+            size
+        } else {
+            separator + size
+        };
         if length + added > max {
             chunks.push(std::mem::take(&mut current));
             length = size;
@@ -498,7 +519,10 @@ pub async fn check_languagetool(
         let part: Vec<String> = chunk.iter().map(|&i| blocks[i].clone()).collect();
         let (text, starts) = join_blocks(&part);
         let matches = request_check(&client, endpoint, language, text, disabled).await?;
-        for (issues, &i) in split_matches(matches, &part, &starts).into_iter().zip(&chunk) {
+        for (issues, &i) in split_matches(matches, &part, &starts)
+            .into_iter()
+            .zip(&chunk)
+        {
             out[i] = issues;
         }
     }
@@ -517,7 +541,9 @@ mod tests {
             "Zorglub writes well.".to_string(),
         ];
         let issues = harper.check(&blocks, &[]);
-        assert!(issues[0].iter().any(|i| i.replacements.iter().any(|r| r == "a")));
+        assert!(issues[0]
+            .iter()
+            .any(|i| i.replacements.iter().any(|r| r == "a")));
         assert!(issues[0].iter().all(|i| i.rule != "SpellCheck"));
         assert!(issues[1].is_empty(), "{:?}", issues[1]);
     }
@@ -527,7 +553,9 @@ mod tests {
         let mut harper = Harper::new(Dialect::American);
         let blocks = vec!["This is an test.".to_string()];
         let rule = harper.check(&blocks, &[])[0][0].rule.clone();
-        assert!(harper.check(&blocks, &[rule.clone()])[0].iter().all(|i| i.rule != rule));
+        assert!(harper.check(&blocks, std::slice::from_ref(&rule))[0]
+            .iter()
+            .all(|i| i.rule != rule));
         // And back on.
         assert!(harper.check(&blocks, &[])[0].iter().any(|i| i.rule == rule));
         assert!(harper.rules().iter().any(|r| r.id == rule));
@@ -537,9 +565,12 @@ mod tests {
     fn offsets_count_utf16_units() {
         let mut harper = Harper::new(Dialect::American);
         let text = "Ünïcode 😀 is an test.".to_string();
-        let issue = harper.check(&[text.clone()], &[])[0][0].clone();
+        let issue = harper.check(std::slice::from_ref(&text), &[])[0][0].clone();
         let units: Vec<u16> = text.encode_utf16().collect();
-        assert_eq!(String::from_utf16(&units[issue.from..issue.to]).unwrap(), "an");
+        assert_eq!(
+            String::from_utf16(&units[issue.from..issue.to]).unwrap(),
+            "an"
+        );
     }
 
     #[test]
@@ -553,12 +584,19 @@ mod tests {
             offset,
             length,
             replacements: vec![LtReplacement { value: "x".into() }],
-            rule: LtRule { id: "R".into(), category: LtCategory { name: "C".into() } },
+            rule: LtRule {
+                id: "R".into(),
+                category: LtCategory { name: "C".into() },
+            },
         };
         let issues = split_matches(vec![m(4, 1), m(8, 7), m(5, 4)], &blocks, &starts);
         assert_eq!((issues[0][0].from, issues[0][0].to), (4, 5));
         assert_eq!((issues[1][0].from, issues[1][0].to), (0, 7));
-        assert_eq!(issues[0].len() + issues[1].len(), 2, "the separator-spanning match is dropped");
+        assert_eq!(
+            issues[0].len() + issues[1].len(),
+            2,
+            "the separator-spanning match is dropped"
+        );
     }
 
     #[test]
@@ -570,17 +608,34 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(provider(&with(None, None)), Provider::Builtin);
-        assert_eq!(provider(&with(None, Some("https://lt"))), Provider::LanguageTool("https://lt"));
-        assert_eq!(provider(&with(Some("builtin"), Some("https://lt"))), Provider::Builtin);
-        assert_eq!(provider(&with(Some("polemic"), Some("https://lt"))), Provider::Polemic);
-        assert_eq!(provider(&with(Some("languagetool"), None)), Provider::Builtin);
+        assert_eq!(
+            provider(&with(None, Some("https://lt"))),
+            Provider::LanguageTool("https://lt")
+        );
+        assert_eq!(
+            provider(&with(Some("builtin"), Some("https://lt"))),
+            Provider::Builtin
+        );
+        assert_eq!(
+            provider(&with(Some("polemic"), Some("https://lt"))),
+            Provider::Polemic
+        );
+        assert_eq!(
+            provider(&with(Some("languagetool"), None)),
+            Provider::Builtin
+        );
     }
 
     #[test]
     fn long_checks_are_split_below_the_limit() {
-        let blocks: Vec<String> = ["aaaa", "bb", "cccccc", "dd", "é"].map(String::from).to_vec();
+        let blocks: Vec<String> = ["aaaa", "bb", "cccccc", "dd", "é"]
+            .map(String::from)
+            .to_vec();
         // Joined with "\n\n": aaaa+bb = 8, +cccccc would be 16.
-        assert_eq!(chunk_blocks(&blocks, 10), vec![vec![0, 1], vec![2, 3], vec![4]]);
+        assert_eq!(
+            chunk_blocks(&blocks, 10),
+            vec![vec![0, 1], vec![2, 3], vec![4]]
+        );
         // A block over the limit on its own is left out.
         assert_eq!(chunk_blocks(&blocks, 5), vec![vec![0], vec![1], vec![3, 4]]);
         assert_eq!(chunk_blocks(&blocks, usize::MAX), vec![vec![0, 1, 2, 3, 4]]);
@@ -601,12 +656,18 @@ mod tests {
         assert_eq!(kind(401, false), Failed);
         let limited = error_for(429, Some("17"), "", true);
         assert_eq!((limited.kind, limited.retry_after), (RateLimited, Some(17)));
-        assert_eq!(error_for(429, Some("soon"), "", true).retry_after, Some(DEFAULT_RETRY_AFTER));
+        assert_eq!(
+            error_for(429, Some("soon"), "", true).retry_after,
+            Some(DEFAULT_RETRY_AFTER)
+        );
         // LanguageTool's own 4xx text passes through.
         let bad = error_for(400, None, "Error: 'xx' is not a language code", true);
         assert_eq!(bad.kind, Failed);
         assert!(bad.message.contains("'xx' is not a language code"));
-        assert_eq!(error_for(400, None, "{\"error\":\"x\"}", true).message, "LanguageTool answered 400");
+        assert_eq!(
+            error_for(400, None, "{\"error\":\"x\"}", true).message,
+            "LanguageTool answered 400"
+        );
     }
 
     // --- against a stub server ---
@@ -649,12 +710,16 @@ mod tests {
                 let head = String::from_utf8_lossy(&buf[..head_end]).to_string();
                 let authorization = head.lines().find_map(|l| {
                     let (name, value) = l.split_once(':')?;
-                    name.eq_ignore_ascii_case("authorization").then(|| value.trim().to_string())
+                    name.eq_ignore_ascii_case("authorization")
+                        .then(|| value.trim().to_string())
                 });
                 let form = url::form_urlencoded::parse(&buf[head_end..head_end + length])
                     .into_owned()
                     .collect();
-                seen.push(Seen { authorization, form });
+                seen.push(Seen {
+                    authorization,
+                    form,
+                });
                 stream.write_all(answer.as_bytes()).unwrap();
             }
             seen
@@ -673,10 +738,24 @@ mod tests {
         answer("200 OK", "Content-Type: application/json\r\n", body)
     }
 
-    fn check(base: &str, bearer: Option<&str>, max: usize, blocks: &[&str]) -> Result<Vec<Vec<GrammarIssue>>, GrammarError> {
+    fn check(
+        base: &str,
+        bearer: Option<&str>,
+        max: usize,
+        blocks: &[&str],
+    ) -> Result<Vec<Vec<GrammarIssue>>, GrammarError> {
         let blocks: Vec<String> = blocks.iter().map(|b| b.to_string()).collect();
-        let endpoint = Endpoint { base_url: base, bearer, max_chars: max };
-        tauri::async_runtime::block_on(check_languagetool(&endpoint, "en-US", &blocks, &["R1".into()]))
+        let endpoint = Endpoint {
+            base_url: base,
+            bearer,
+            max_chars: max,
+        };
+        tauri::async_runtime::block_on(check_languagetool(
+            &endpoint,
+            "en-US",
+            &blocks,
+            &["R1".into()],
+        ))
     }
 
     const MATCH: &str = r#"{"matches":[{"message":"m","offset":0,"length":2,"replacements":[{"value":"x"}],"rule":{"id":"R","category":{"name":"C"}}}]}"#;
@@ -696,13 +775,21 @@ mod tests {
         assert_eq!(seen[1].form["text"], "cccccc");
         assert_eq!(seen[0].form["language"], "en-US");
         assert_eq!(seen[0].form["disabledRules"], "R1");
-        assert!(seen.iter().all(|s| s.authorization.as_deref() == Some("Bearer tok")));
+        assert!(seen
+            .iter()
+            .all(|s| s.authorization.as_deref() == Some("Bearer tok")));
     }
 
     #[test]
     fn own_servers_never_get_a_token() {
         let (port, server) = stub(vec![json(r#"{"matches":[]}"#)]);
-        let issues = check(&format!("http://127.0.0.1:{port}/v2"), None, usize::MAX, &["Hi."]).unwrap();
+        let issues = check(
+            &format!("http://127.0.0.1:{port}/v2"),
+            None,
+            usize::MAX,
+            &["Hi."],
+        )
+        .unwrap();
         assert_eq!(issues, vec![Vec::new()]);
         assert_eq!(server.join().unwrap()[0].authorization, None);
     }
@@ -718,12 +805,56 @@ mod tests {
         };
         let problem = "Content-Type: application/json\r\n";
         use GrammarErrorKind::*;
-        assert_eq!(error("401 Unauthorized", problem, r#"{"error":"unauthorized","message":"Sign in"}"#).kind, SignedOut);
-        assert_eq!(error("402 Payment Required", problem, r#"{"error":"plan_required","message":"x"}"#).kind, PlanRequired);
-        assert_eq!(error("413 Payload Too Large", problem, r#"{"error":"text_too_long","message":"x"}"#).kind, TooLong);
-        assert_eq!(error("502 Bad Gateway", problem, r#"{"error":"grammar_unavailable","message":"x"}"#).kind, Unavailable);
-        assert_eq!(error("404 Not Found", problem, r#"{"error":"grammar_disabled","message":"x"}"#).kind, Unavailable);
-        let bad = error("400 Bad Request", "Content-Type: text/plain\r\n", "Error: 'xx' is not a language code");
+        assert_eq!(
+            error(
+                "401 Unauthorized",
+                problem,
+                r#"{"error":"unauthorized","message":"Sign in"}"#
+            )
+            .kind,
+            SignedOut
+        );
+        assert_eq!(
+            error(
+                "402 Payment Required",
+                problem,
+                r#"{"error":"plan_required","message":"x"}"#
+            )
+            .kind,
+            PlanRequired
+        );
+        assert_eq!(
+            error(
+                "413 Payload Too Large",
+                problem,
+                r#"{"error":"text_too_long","message":"x"}"#
+            )
+            .kind,
+            TooLong
+        );
+        assert_eq!(
+            error(
+                "502 Bad Gateway",
+                problem,
+                r#"{"error":"grammar_unavailable","message":"x"}"#
+            )
+            .kind,
+            Unavailable
+        );
+        assert_eq!(
+            error(
+                "404 Not Found",
+                problem,
+                r#"{"error":"grammar_disabled","message":"x"}"#
+            )
+            .kind,
+            Unavailable
+        );
+        let bad = error(
+            "400 Bad Request",
+            "Content-Type: text/plain\r\n",
+            "Error: 'xx' is not a language code",
+        );
         assert_eq!(bad.kind, Failed);
         assert!(bad.message.contains("not a language code"));
     }
@@ -737,7 +868,10 @@ mod tests {
         )]);
         let base = format!("http://127.0.0.1:{port}/api/grammar/v2");
         let first = check(&base, Some("tok"), POLEMIC_MAX_CHARS, &["Text."]).unwrap_err();
-        assert_eq!((first.kind, first.retry_after), (GrammarErrorKind::RateLimited, Some(30)));
+        assert_eq!(
+            (first.kind, first.retry_after),
+            (GrammarErrorKind::RateLimited, Some(30))
+        );
         assert_eq!(server.join().unwrap().len(), 1);
         // The stub is gone: a second request would fail as unreachable.
         let second = check(&base, Some("tok"), POLEMIC_MAX_CHARS, &["Text."]).unwrap_err();
@@ -747,8 +881,18 @@ mod tests {
 
     #[test]
     fn unreachable_servers_are_unavailable() {
-        let port = TcpListener::bind(("127.0.0.1", 0)).unwrap().local_addr().unwrap().port();
-        let error = check(&format!("http://127.0.0.1:{port}/api/grammar/v2"), Some("tok"), 10, &["Text."]).unwrap_err();
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let error = check(
+            &format!("http://127.0.0.1:{port}/api/grammar/v2"),
+            Some("tok"),
+            10,
+            &["Text."],
+        )
+        .unwrap_err();
         assert_eq!(error.kind, GrammarErrorKind::Unavailable);
     }
 
@@ -771,8 +915,10 @@ mod tests {
             let issues = result.unwrap();
             for (block, found) in blocks.iter().zip(&issues) {
                 let units: Vec<u16> = block.encode_utf16().collect();
-                let marked: Vec<String> =
-                    found.iter().map(|i| String::from_utf16(&units[i.from..i.to]).unwrap()).collect();
+                let marked: Vec<String> = found
+                    .iter()
+                    .map(|i| String::from_utf16(&units[i.from..i.to]).unwrap())
+                    .collect();
                 assert!(marked.iter().any(|m| m == "an"), "{block}: {marked:?}");
             }
         }

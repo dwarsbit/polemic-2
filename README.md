@@ -79,19 +79,19 @@ switched off. See the [security page](https://polemicapp.com/docs/reference/secu
 
 ## Compared with Overleaf and TeXstudio
 
-| | Polemic | Overleaf | TeXstudio |
-| --- | --- | --- | --- |
-| Runs on | Desktop | Browser | Desktop |
-| Works offline | Yes | No | Yes |
-| Files on your own machine | Yes | No | Yes |
-| Open source | Yes | Yes | Yes |
-| Visual editor | Yes | Yes | No |
-| Live PDF preview | Yes | Yes | Yes |
-| SyncTeX | Yes | Yes | Yes |
-| Compile without installing TeX | Yes, with an account | Yes | No |
-| Comments | Yes | Yes | No |
-| Review links | Yes, with an account | Yes | No |
-| Edit together in real time | No | Yes | No |
+|                                | Polemic              | Overleaf | TeXstudio |
+| ------------------------------ | -------------------- | -------- | --------- |
+| Runs on                        | Desktop              | Browser  | Desktop   |
+| Works offline                  | Yes                  | No       | Yes       |
+| Files on your own machine      | Yes                  | No       | Yes       |
+| Open source                    | Yes                  | Yes      | Yes       |
+| Visual editor                  | Yes                  | Yes      | No        |
+| Live PDF preview               | Yes                  | Yes      | Yes       |
+| SyncTeX                        | Yes                  | Yes      | Yes       |
+| Compile without installing TeX | Yes, with an account | Yes      | No        |
+| Comments                       | Yes                  | Yes      | No        |
+| Review links                   | Yes, with an account | Yes      | No        |
+| Edit together in real time     | No                   | Yes      | No        |
 
 - **Compared with Overleaf**: Overleaf runs in the browser, and co-authors
   can edit together in real time. Polemic runs on your desktop and works
@@ -109,6 +109,11 @@ The full comparison is on the [compare page](https://polemicapp.com/compare).
 
 Polemic is a Tauri app: a React front end in `src/` and a Rust back end in
 `src-tauri/`.
+
+This repository mirrors Polemic's folder in the Scholarkit monorepo, where
+it is developed, and is updated with every change there. Pull requests are
+welcome here: an accepted one is applied in Scholarkit and comes back with
+the next update.
 
 ### Requirements
 

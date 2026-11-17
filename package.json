@@ -1,18 +1,25 @@
 {
-  "name": "polemic",
+  "name": "@scholarkit/polemic",
   "private": true,
   "version": "0.24.0",
   "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "dev:web": "vite --mode web",
-    "build": "tsc && vite build",
-    "build:web": "tsc && vite build --mode web",
+    "build": "vite build && vite build --mode web",
+    "build:desktop": "vite build",
+    "build:web": "vite build --mode web",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "test": "vitest run"
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "lint:rust": "cargo fmt --check --manifest-path src-tauri/Cargo.toml && cargo fmt --check --manifest-path tools/corpus/probe/Cargo.toml && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --locked && cargo test --manifest-path tools/corpus/probe/Cargo.toml --locked"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -62,23 +69,21 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@scholarkit/eslint-config": "workspace:*",
+    "@scholarkit/tsconfig": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@tauri-apps/cli": "^2.12.0",
     "@types/katex": "^0.16.8",
-    "@types/node": "^26.6.3",
+    "@types/node": "catalog:",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
-    "eslint": "^10.11.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint": "catalog:",
+    "globals": "catalog:",
     "happy-dom": "^20.14.5",
-    "prettier": "^3.9.9",
     "tailwindcss": "^4.3.3",
-    "typescript": "~6.0.3",
-    "typescript-eslint": "^8.70.1",
+    "typescript": "catalog:",
     "vite": "^8.0.16",
-    "vitest": "^5.0.2"
-  },
-  "packageManager": "pnpm@12.6.0"
+    "vitest": "catalog:"
+  }
 }

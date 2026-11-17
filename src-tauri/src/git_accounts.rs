@@ -66,7 +66,10 @@ fn encode(secret: &Secret) -> Result<String, String> {
     Ok(match secret {
         Secret::Token(token) => token.clone(),
         Secret::OAuth(oauth) => {
-            format!("{OAUTH_PREFIX}{}", serde_json::to_string(oauth).map_err(|e| e.to_string())?)
+            format!(
+                "{OAUTH_PREFIX}{}",
+                serde_json::to_string(oauth).map_err(|e| e.to_string())?
+            )
         }
     })
 }
@@ -119,8 +122,12 @@ fn write(store: &impl Store, tokens: &Tokens) -> Result<(), String> {
 pub fn set_secret_with(store: &impl Store, id: &str, secret: &Secret) -> Result<(), String> {
     let mut map = tokens(store);
     map.insert(id.to_string(), encode(secret)?);
-    write(store, &map)
-        .map_err(|e| format!("Could not save the token in the system's credential store: {}", sentence(&e)))
+    write(store, &map).map_err(|e| {
+        format!(
+            "Could not save the token in the system's credential store: {}",
+            sentence(&e)
+        )
+    })
 }
 
 pub fn remove_token_with(store: &impl Store, id: &str) -> Result<(), String> {
@@ -128,8 +135,12 @@ pub fn remove_token_with(store: &impl Store, id: &str) -> Result<(), String> {
     if map.remove(id).is_none() {
         return Ok(());
     }
-    write(store, &map)
-        .map_err(|e| format!("Could not update the system's credential store: {}", sentence(&e)))
+    write(store, &map).map_err(|e| {
+        format!(
+            "Could not update the system's credential store: {}",
+            sentence(&e)
+        )
+    })
 }
 
 /// What the store keeps for one account.
@@ -231,7 +242,12 @@ mod tests {
     }
 
     fn account(id: &str, host: &str, username: &str) -> GitAccount {
-        GitAccount { id: id.into(), host: host.into(), username: username.into(), name: None }
+        GitAccount {
+            id: id.into(),
+            host: host.into(),
+            username: username.into(),
+            name: None,
+        }
     }
 
     #[test]
@@ -245,7 +261,10 @@ mod tests {
         set_secret_with(&store, "gl", &Secret::OAuth(oauth.clone())).unwrap();
         set_secret_with(&store, "gh", &Secret::Token("plain".into())).unwrap();
         assert_eq!(secret_with(&store, "gl"), Some(Secret::OAuth(oauth)));
-        assert_eq!(secret_with(&store, "gh"), Some(Secret::Token("plain".into())));
+        assert_eq!(
+            secret_with(&store, "gh"),
+            Some(Secret::Token("plain".into()))
+        );
         // Fetch, pull and push see the access token either way.
         assert_eq!(secret_with(&store, "gl").unwrap().access_token(), "a");
         assert_eq!(secret_with(&store, "gh").unwrap().access_token(), "plain");
@@ -254,27 +273,46 @@ mod tests {
     #[test]
     fn refreshes_shortly_before_expiry_only() {
         let oauth = |expires_at| {
-            Secret::OAuth(OAuthToken { access_token: "a".into(), refresh_token: "r".into(), expires_at })
+            Secret::OAuth(OAuthToken {
+                access_token: "a".into(),
+                refresh_token: "r".into(),
+                expires_at,
+            })
         };
         assert_eq!(due_for_refresh(&oauth(10_000), 1_000), None);
         assert_eq!(due_for_refresh(&oauth(1_200), 1_000), Some("r"));
         assert_eq!(due_for_refresh(&oauth(500), 1_000), Some("r"));
-        assert_eq!(due_for_refresh(&Secret::Token("t".into()), u64::MAX / 2), None);
+        assert_eq!(
+            due_for_refresh(&Secret::Token("t".into()), u64::MAX / 2),
+            None
+        );
     }
 
     #[test]
     fn normalizes_hosts() {
         assert_eq!(normalize_host("github.com").unwrap(), "github.com");
-        assert_eq!(normalize_host(" https://GitLab.example.org/ ").unwrap(), "gitlab.example.org");
-        assert_eq!(normalize_host("git.example.org:8443/x").unwrap(), "git.example.org:8443");
+        assert_eq!(
+            normalize_host(" https://GitLab.example.org/ ").unwrap(),
+            "gitlab.example.org"
+        );
+        assert_eq!(
+            normalize_host("git.example.org:8443/x").unwrap(),
+            "git.example.org:8443"
+        );
         assert!(normalize_host("").is_err());
         assert!(normalize_host("not a host").is_err());
     }
 
     #[test]
     fn only_http_remotes_have_a_host() {
-        assert_eq!(host_of("https://github.com/ada/paper.git").as_deref(), Some("github.com"));
-        assert_eq!(host_of("http://localhost:3000/ada/paper.git").as_deref(), Some("localhost:3000"));
+        assert_eq!(
+            host_of("https://github.com/ada/paper.git").as_deref(),
+            Some("github.com")
+        );
+        assert_eq!(
+            host_of("http://localhost:3000/ada/paper.git").as_deref(),
+            Some("localhost:3000")
+        );
         assert_eq!(host_of("git@github.com:ada/paper.git"), None);
         assert_eq!(host_of("ssh://git@github.com/ada/paper.git"), None);
         assert_eq!(host_of("file:///tmp/paper.git"), None);
@@ -287,11 +325,31 @@ mod tests {
             account("2", "github.com", "bob"),
             account("3", "gitlab.com", "ada"),
         ];
-        assert_eq!(account_for(&accounts, "https://github.com/x/y.git").unwrap().id, "1");
-        assert_eq!(account_for(&accounts, "https://bob@github.com/x/y.git").unwrap().id, "2");
+        assert_eq!(
+            account_for(&accounts, "https://github.com/x/y.git")
+                .unwrap()
+                .id,
+            "1"
+        );
+        assert_eq!(
+            account_for(&accounts, "https://bob@github.com/x/y.git")
+                .unwrap()
+                .id,
+            "2"
+        );
         // An unknown name on a known host still gets the host's account.
-        assert_eq!(account_for(&accounts, "https://eve@github.com/x/y.git").unwrap().id, "1");
-        assert_eq!(account_for(&accounts, "https://GITLAB.com/x/y.git").unwrap().id, "3");
+        assert_eq!(
+            account_for(&accounts, "https://eve@github.com/x/y.git")
+                .unwrap()
+                .id,
+            "1"
+        );
+        assert_eq!(
+            account_for(&accounts, "https://GITLAB.com/x/y.git")
+                .unwrap()
+                .id,
+            "3"
+        );
         assert!(account_for(&accounts, "https://codeberg.org/x/y.git").is_none());
         assert!(account_for(&accounts, "git@github.com:x/y.git").is_none());
     }
@@ -299,7 +357,10 @@ mod tests {
     #[test]
     fn tokens_come_and_go_through_the_store() {
         let store = MemoryStore::default();
-        let accounts = vec![account("1", "github.com", "ada"), account("2", "gitlab.com", "ada")];
+        let accounts = vec![
+            account("1", "github.com", "ada"),
+            account("2", "gitlab.com", "ada"),
+        ];
         let github_token = |store: &MemoryStore| {
             let account = account_for(&accounts, "https://github.com/x/y.git")?;
             secret_with(store, &account.id).map(|s| s.access_token().to_string())
@@ -312,9 +373,12 @@ mod tests {
         assert!(views.iter().all(|v| v.has_token));
         remove_token_with(&store, "1").unwrap();
         assert_eq!(github_token(&store), None);
-        assert_eq!(views_with(&accounts, &store)[0].has_token, false);
+        assert!(!views_with(&accounts, &store)[0].has_token);
         remove_token_with(&store, "2").unwrap();
-        assert!(store.get().unwrap().is_none(), "the credential goes with the last token");
+        assert!(
+            store.get().unwrap().is_none(),
+            "the credential goes with the last token"
+        );
         remove_token_with(&store, "missing").unwrap();
     }
 }

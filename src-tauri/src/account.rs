@@ -102,8 +102,10 @@ pub fn normalize_server(input: &str) -> Result<String, String> {
         return Ok(DEFAULT_SERVER.into());
     }
     crate::ai::check_service_url(trimmed, "The server URL")?;
-    let url =
-        url::Url::parse(trimmed).map_err(|_| "That isn't a valid server URL. It should look like https://polemic.example.org.".to_string())?;
+    let url = url::Url::parse(trimmed).map_err(|_| {
+        "That isn't a valid server URL. It should look like https://polemic.example.org."
+            .to_string()
+    })?;
     if url.host_str().is_none()
         || url.query().is_some()
         || url.fragment().is_some()
@@ -363,7 +365,7 @@ pub async fn sign_in_with(
         .json(&body)
         .send()
         .await
-        .map_err(|e| crate::errors::no_answer(&server, e.is_timeout()))?;
+        .map_err(|e| crate::errors::no_answer(server, e.is_timeout()))?;
     if !response.status().is_success() {
         return Err(error_message(response).await);
     }

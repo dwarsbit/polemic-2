@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EditorSelection, EditorState, SelectionRange } from "@codemirror/state";
+import type { SelectionRange } from "@codemirror/state";
+import { EditorSelection, EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { deleteLines, lineBounds } from "./line-ops";
 

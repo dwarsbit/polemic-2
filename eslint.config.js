@@ -1,27 +1,8 @@
-import eslint from "@eslint/js";
-import tseslint from "typescript-eslint";
-import reactHooks from "eslint-plugin-react-hooks";
+import { react } from "@scholarkit/eslint-config";
+import globals from "globals";
 
-export default tseslint.config(
-  eslint.configs.recommended,
-  ...tseslint.configs.recommended,
-  {
-    files: ["**/*.{ts,tsx}"],
-    plugins: {
-      "react-hooks": reactHooks,
-    },
-    rules: {
-      ...reactHooks.configs.recommended.rules,
-    },
-  },
-  {
-    ignores: [
-      "dist/**",
-      "dist-web/**",
-      "src-tauri/**",
-      "node_modules/**",
-      "components.json",
-      "website/**",
-    ],
-  },
-);
+export default [
+  ...react,
+  // The corpus runner and the scripts run in Node, not in the webview.
+  { files: ["tools/**", "scripts/**"], languageOptions: { globals: globals.node } },
+];

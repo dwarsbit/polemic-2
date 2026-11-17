@@ -15,17 +15,15 @@ pub fn list(project_dir: &Path) -> HashMap<String, Vec<String>> {
         .unwrap_or_default()
 }
 
-pub fn save(
-    project_dir: &Path,
-    tags: &HashMap<String, Vec<String>>,
-) -> Result<(), String> {
+pub fn save(project_dir: &Path, tags: &HashMap<String, Vec<String>>) -> Result<(), String> {
     let file = meta_file(project_dir);
     if let Some(parent) = file.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| crate::errors::failed("Could not save the tags", &e))?;
     }
     let json = serde_json::to_string_pretty(tags).map_err(|e| e.to_string())?;
-    crate::files::write_atomic(&file, json.as_bytes()).map_err(|e| crate::errors::failed("Could not save the tags", &e))
+    crate::files::write_atomic(&file, json.as_bytes())
+        .map_err(|e| crate::errors::failed("Could not save the tags", &e))
 }
 
 /// System fonts for text in SVGs, loaded once per run (loading takes a
@@ -46,7 +44,8 @@ fn fontdb() -> std::sync::Arc<svg2pdf::usvg::fontdb::Database> {
 /// (`\includegraphics` cannot read SVG). Relative references inside
 /// the SVG resolve from its own folder.
 pub fn svg_to_pdf(svg: &Path, pdf: &Path) -> Result<(), String> {
-    let data = fs::read(svg).map_err(|e| crate::errors::failed(format_args!("Could not open {}", svg.display()), &e))?;
+    let data = fs::read(svg)
+        .map_err(|e| crate::errors::failed(format_args!("Could not open {}", svg.display()), &e))?;
     let options = svg2pdf::usvg::Options {
         resources_dir: svg.parent().map(Path::to_path_buf),
         fontdb: fontdb(),

@@ -316,8 +316,9 @@ pub fn move_links(file: &Path, from: &Path, to: &Path) -> Result<(), String> {
     };
     links.links.insert(to.to_string_lossy().to_string(), link);
     let json = serde_json::to_vec_pretty(&links).map_err(|e| e.to_string())?;
-    crate::files::write_atomic(file, &json)
-        .map_err(|e| crate::errors::failed("Could not save the link to the project in your account", &e))
+    crate::files::write_atomic(file, &json).map_err(|e| {
+        crate::errors::failed("Could not save the link to the project in your account", &e)
+    })
 }
 
 /// Stores the folder's link, or forgets it (None).
@@ -334,12 +335,14 @@ pub fn set_link_in(file: &Path, dir: &Path, link: Option<ShareLink>) -> Result<(
         }
     }
     if let Some(parent) = file.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| crate::errors::failed("Could not save the link to the project in your account", &e))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            crate::errors::failed("Could not save the link to the project in your account", &e)
+        })?;
     }
     let json = serde_json::to_vec_pretty(&links).map_err(|e| e.to_string())?;
-    crate::files::write_atomic(file, &json)
-        .map_err(|e| crate::errors::failed("Could not save the link to the project in your account", &e))
+    crate::files::write_atomic(file, &json).map_err(|e| {
+        crate::errors::failed("Could not save the link to the project in your account", &e)
+    })
 }
 
 /// Adds comment ids to the folder's link (see ShareLink::seen_comments).
@@ -365,8 +368,9 @@ pub fn see_comments_in(
         return Ok(());
     }
     let json = serde_json::to_vec_pretty(&links).map_err(|e| e.to_string())?;
-    crate::files::write_atomic(file, &json)
-        .map_err(|e| crate::errors::failed("Could not save the link to the project in your account", &e))
+    crate::files::write_atomic(file, &json).map_err(|e| {
+        crate::errors::failed("Could not save the link to the project in your account", &e)
+    })
 }
 
 // --- the server --------------------------------------------------------------------
@@ -711,9 +715,11 @@ impl<'a> Session<'a> {
             .await
             .map_err(|_| unreachable(self.server))?;
         if cloud_compile::hash_bytes(&bytes) != hash {
-            return Err("A file came from the server damaged. It is fetched again on the next sync."
-                .to_string()
-                .into());
+            return Err(
+                "A file came from the server damaged. It is fetched again on the next sync."
+                    .to_string()
+                    .into(),
+            );
         }
         Ok(bytes.to_vec())
     }
@@ -781,7 +787,9 @@ impl<'a> Session<'a> {
         let bytes = tauri::async_runtime::spawn_blocking(move || fs::read(path))
             .await
             .map_err(|e| e.to_string())?
-            .map_err(|e| crate::errors::failed(format_args!("Could not open {}", abs.display()), &e))?;
+            .map_err(|e| {
+                crate::errors::failed(format_args!("Could not open {}", abs.display()), &e)
+            })?;
         if cloud_compile::hash_bytes(&bytes) != hash {
             return Ok(None);
         }
@@ -927,7 +935,9 @@ impl<'a> Session<'a> {
             .await?;
         // The link must open on the account's server: never hand out another host.
         let Some(url) = link.url.as_deref() else {
-            return Err("The server did not return the link. Try again in a moment.".to_string().into());
+            return Err("The server did not return the link. Try again in a moment."
+                .to_string()
+                .into());
         };
         let server_origin = url::Url::parse(self.server)
             .map_err(|e| e.to_string())?
@@ -1079,9 +1089,7 @@ impl<'a> Session<'a> {
         };
         self.send(
             self.client
-                .post(self.url(&format!(
-                    "/api/projects/{id}/history/{snapshot_id}/restore"
-                )))
+                .post(self.url(&format!("/api/projects/{id}/history/{snapshot_id}/restore")))
                 .json(&body),
         )
         .await
@@ -1414,7 +1422,6 @@ pub async fn share_leave(app: tauri::AppHandle, project_dir: String) -> Result<(
     }
 }
 
-
 /// The project's online snapshots, newest first.
 #[tauri::command]
 pub async fn share_history(
@@ -1701,9 +1708,13 @@ mod tests {
             PlanRequired
         );
         let limit = error_for(409, &body("review_link_limit", "One active review link."));
-        assert_eq!((limit.kind, limit.message.as_str()), (LimitReached, "One active review link."));
+        assert_eq!(
+            (limit.kind, limit.message.as_str()),
+            (LimitReached, "One active review link.")
+        );
         let link: ReviewLink =
-            serde_json::from_str(r#"{"id":"l","role":"viewer","expiresAt":null,"createdAt":"t"}"#).unwrap();
+            serde_json::from_str(r#"{"id":"l","role":"viewer","expiresAt":null,"createdAt":"t"}"#)
+                .unwrap();
         assert!(link.active, "links from servers before plans work");
         assert_eq!(
             error_for(404, &body("not_found", "No such project")).kind,
@@ -1971,7 +1982,10 @@ mod tests {
                 ),
             ),
             "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".to_string(),
-            json("404 Not Found", r#"{"error":"not_found","message":"No such snapshot"}"#),
+            json(
+                "404 Not Found",
+                r#"{"error":"not_found","message":"No such snapshot"}"#,
+            ),
         ]);
         let session = Session::new(&server, "tok").unwrap();
         let history = block(session.history(ID)).unwrap();
@@ -1985,7 +1999,10 @@ mod tests {
         let gone = block(session.restore(ID, SNAP, None)).unwrap_err();
         assert_eq!(gone.kind, ShareErrorKind::Failed);
         let seen = handle.join().unwrap();
-        assert_eq!(seen[2].path, format!("/api/projects/{ID}/history/{SNAP}/restore"));
+        assert_eq!(
+            seen[2].path,
+            format!("/api/projects/{ID}/history/{SNAP}/restore")
+        );
         let body: serde_json::Value = serde_json::from_slice(&seen[2].body).unwrap();
         assert_eq!(body, serde_json::json!({ "paths": ["main.tex"] }));
         let body: serde_json::Value = serde_json::from_slice(&seen[3].body).unwrap();
@@ -2002,7 +2019,9 @@ mod tests {
     fn e2e_publish_against_a_server() {
         let server = std::env::var("POLEMIC_E2E_SERVER").expect("POLEMIC_E2E_SERVER");
         let token = std::env::var("POLEMIC_E2E_TOKEN").expect("POLEMIC_E2E_TOKEN");
-        let update = decode_base64(&std::env::var("POLEMIC_E2E_UPDATE").expect("POLEMIC_E2E_UPDATE")).unwrap();
+        let update =
+            decode_base64(&std::env::var("POLEMIC_E2E_UPDATE").expect("POLEMIC_E2E_UPDATE"))
+                .unwrap();
         let dir = temp_project("e2e");
         write(&dir, "main.tex", b"\\documentclass{article}");
         write(&dir, "fig/a.png", b"png-bytes");
@@ -2012,8 +2031,12 @@ mod tests {
 
         let project = block(session.create_project("E2E")).unwrap();
         let first = block(session.sync(&project.id, "AA==")).unwrap();
-        assert_eq!(decode_base64(&first.update).unwrap(), [0, 0], "a new project's document is empty");
-        block(session.upload_assets(&project.id, &dir, &[png.clone()])).unwrap();
+        assert_eq!(
+            decode_base64(&first.update).unwrap(),
+            [0, 0],
+            "a new project's document is empty"
+        );
+        block(session.upload_assets(&project.id, &dir, std::slice::from_ref(&png))).unwrap();
         // The second upload finds the asset stored and sends nothing.
         block(session.upload_assets(&project.id, &dir, &[png])).unwrap();
         block(session.push(&project.id, update)).unwrap();
@@ -2021,9 +2044,15 @@ mod tests {
         assert!(decode_base64(&after.update).unwrap().len() > 2);
 
         let snapshot = block(session.publish(&project.id, &dir, Some("main.tex"))).unwrap();
-        assert_eq!(snapshot.pdf, Some(cloud_compile::hash_bytes(b"%PDF-1.7 e2e")));
+        assert_eq!(
+            snapshot.pdf,
+            Some(cloud_compile::hash_bytes(b"%PDF-1.7 e2e"))
+        );
         assert_eq!(snapshot.synctex, None);
-        assert_eq!(block(session.snapshots(&project.id)).unwrap()[0].id, snapshot.id);
+        assert_eq!(
+            block(session.snapshots(&project.id)).unwrap()[0].id,
+            snapshot.id
+        );
 
         let made = block(session.create_link(&project.id, "commenter", Some(7))).unwrap();
         let url = made.url.clone().unwrap();
@@ -2052,7 +2081,10 @@ mod tests {
             assert_eq!(gone.kind, ShareErrorKind::NotFound);
         }
         let bad = Session::new(&server, "not-a-token").unwrap();
-        assert_eq!(block(bad.snapshots(&project.id)).unwrap_err().kind, ShareErrorKind::SignedOut);
+        assert_eq!(
+            block(bad.snapshots(&project.id)).unwrap_err().kind,
+            ShareErrorKind::SignedOut
+        );
         fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -4,7 +4,7 @@ Compiles real LaTeX projects to find where Polemic fails and to collect compiler
 
 `catalog.json` lists 829 public projects from GitHub, arXiv and CTAN, in a mixed order. The [Corpus test workflow](../../.github/workflows/corpus.yml) compiles all of them when it is run by hand, each one twice:
 
-- **Polemic**: the files, main file and engine the editor would pick, sent to the compile service built from polemic-server
+- **Polemic**: the files, main file and engine the editor would pick, sent to the compile service built from Scholarkit's `apps/compile`
 - **Plain latexmk**: the author's main file and engine in the same TeX Live, with the project's own latexmkrc and shell escape
 
 A project that builds with plain latexmk but fails in Polemic points at something to fix in Polemic. A project that fails in both is a broken or incomplete document, and its log helps improve the error messages and fixes.

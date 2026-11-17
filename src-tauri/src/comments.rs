@@ -61,7 +61,9 @@ fn comments_dir(project_dir: &Path) -> PathBuf {
 fn valid_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 100
-        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 fn comment_path(project_dir: &Path, id: &str) -> PathBuf {
@@ -136,7 +138,11 @@ pub fn list(project_dir: &Path) -> Vec<Comment> {
                 .collect()
         })
         .unwrap_or_default();
-    comments.sort_by(|a, b| a.created_at.cmp(&b.created_at).then_with(|| a.id.cmp(&b.id)));
+    comments.sort_by(|a, b| {
+        a.created_at
+            .cmp(&b.created_at)
+            .then_with(|| a.id.cmp(&b.id))
+    });
     remember(project_dir, comments.iter().map(|c| c.id.clone()));
     comments
 }
@@ -225,7 +231,8 @@ mod tests {
     }
 
     fn temp_project(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("polemic-comments-{name}-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("polemic-comments-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -259,11 +266,15 @@ mod tests {
     fn moves_comments_json_into_one_file_each() {
         let dir = temp_project("migrate");
         fs::create_dir_all(dir.join(".polemic")).unwrap();
-        let old = serde_json::to_string(&vec![comment("b", 2, "second"), comment("a", 1, "first")]).unwrap();
+        let old = serde_json::to_string(&vec![comment("b", 2, "second"), comment("a", 1, "first")])
+            .unwrap();
         fs::write(legacy_file(&dir), old).unwrap();
 
         let comments = list(&dir);
-        assert_eq!(comments.iter().map(|c| c.text.as_str()).collect::<Vec<_>>(), ["first", "second"]);
+        assert_eq!(
+            comments.iter().map(|c| c.text.as_str()).collect::<Vec<_>>(),
+            ["first", "second"]
+        );
         assert_eq!(files(&dir), ["a.json", "b.json"]);
         assert!(!legacy_file(&dir).exists());
         let _ = fs::remove_dir_all(dir);
@@ -277,7 +288,11 @@ mod tests {
         assert_eq!(files(&dir), ["a.json", "b.json"]);
 
         // A pull brings a comment from another device after the last read.
-        fs::write(comment_path(&dir, "c"), serde_json::to_string(&comment("c", 3, "theirs")).unwrap()).unwrap();
+        fs::write(
+            comment_path(&dir, "c"),
+            serde_json::to_string(&comment("c", 3, "theirs")).unwrap(),
+        )
+        .unwrap();
         // The editor removes "a" and edits "b", knowing nothing of "c".
         save(&dir, &[comment("b", 2, "two, edited")]).unwrap();
         assert_eq!(files(&dir), ["b.json", "c.json"]);

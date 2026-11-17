@@ -24,47 +24,6 @@ pub fn parse_frequency_list(content: &str) -> Vec<String> {
     words
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_frequency_lists_with_threshold() {
-        let list = "der 100\ntraurig 12\neinmal 5\ntypo 4\nandere 1\n";
-        let words = parse_frequency_list(list);
-        assert_eq!(words, vec!["der", "traurig", "einmal"]);
-    }
-
-    #[test]
-    fn suggests_close_words_in_the_original_case() {
-        let words = ["world", "word", "would", "wild", "house", "ward"];
-        let state = SpellState::from_words(words.iter().map(|w| w.to_string()), &[]);
-        // One swap away first; then two-edit ties, same length first.
-        assert_eq!(state.suggest("wrold", 3), vec!["world", "would", "wild"]);
-        assert_eq!(state.suggest("Wrold", 1), vec!["World"]);
-        assert!(state.suggest("zzzzzz", 3).is_empty());
-        let words = ["tea", "tech", "ted", "the", "teh"];
-        let state = SpellState::from_words(words.iter().map(|w| w.to_string()), &[]);
-        assert_eq!(state.suggest("Teh", 1), vec!["The"]);
-    }
-
-    #[test]
-    fn measures_edits_with_swaps() {
-        let chars = |s: &str| s.chars().collect::<Vec<_>>();
-        assert_eq!(edit_distance(&chars("teh"), &chars("the"), 2), Some(1));
-        assert_eq!(edit_distance(&chars("cat"), &chars("dog"), 2), None);
-        assert_eq!(edit_distance(&chars("mädchen"), &chars("madchen"), 2), Some(1));
-    }
-
-    #[test]
-    fn checks_words_from_any_source() {
-        let state =
-            SpellState::from_words(vec!["haus".to_string(), "buch".to_string()], &[]);
-        assert!(state.check_one("Haus"));
-        assert!(!state.check_one("Hauss"));
-    }
-}
-
 /// Optimal string alignment distance, or None when above `max`.
 fn edit_distance(a: &[char], b: &[char], max: usize) -> Option<usize> {
     let mut prev2: Vec<usize> = Vec::new();
@@ -193,5 +152,48 @@ impl SpellState {
 
     pub fn add(&mut self, word: &str) {
         self.known.insert(word.to_lowercase());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_frequency_lists_with_threshold() {
+        let list = "der 100\ntraurig 12\neinmal 5\ntypo 4\nandere 1\n";
+        let words = parse_frequency_list(list);
+        assert_eq!(words, vec!["der", "traurig", "einmal"]);
+    }
+
+    #[test]
+    fn suggests_close_words_in_the_original_case() {
+        let words = ["world", "word", "would", "wild", "house", "ward"];
+        let state = SpellState::from_words(words.iter().map(|w| w.to_string()), &[]);
+        // One swap away first; then two-edit ties, same length first.
+        assert_eq!(state.suggest("wrold", 3), vec!["world", "would", "wild"]);
+        assert_eq!(state.suggest("Wrold", 1), vec!["World"]);
+        assert!(state.suggest("zzzzzz", 3).is_empty());
+        let words = ["tea", "tech", "ted", "the", "teh"];
+        let state = SpellState::from_words(words.iter().map(|w| w.to_string()), &[]);
+        assert_eq!(state.suggest("Teh", 1), vec!["The"]);
+    }
+
+    #[test]
+    fn measures_edits_with_swaps() {
+        let chars = |s: &str| s.chars().collect::<Vec<_>>();
+        assert_eq!(edit_distance(&chars("teh"), &chars("the"), 2), Some(1));
+        assert_eq!(edit_distance(&chars("cat"), &chars("dog"), 2), None);
+        assert_eq!(
+            edit_distance(&chars("mädchen"), &chars("madchen"), 2),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn checks_words_from_any_source() {
+        let state = SpellState::from_words(vec!["haus".to_string(), "buch".to_string()], &[]);
+        assert!(state.check_one("Haus"));
+        assert!(!state.check_one("Hauss"));
     }
 }

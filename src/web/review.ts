@@ -235,8 +235,16 @@ export const reviewCommands: Record<string, (args: Args) => unknown> = {
   share_folder: (args): FolderEntry[] => {
     const { texts, assets } = readProject(project(args).doc);
     return [
-      ...[...texts].map(([path, { text }]): FolderEntry => ({ path, kind: "text", text })),
-      ...[...assets].map(([path, asset]): FolderEntry => ({ path, kind: "asset", ...asset })),
+      ...[...texts].map(([path, { text }]): FolderEntry => ({
+        path,
+        kind: "text",
+        text,
+      })),
+      ...[...assets].map(([path, asset]): FolderEntry => ({
+        path,
+        kind: "asset",
+        ...asset,
+      })),
     ];
   },
 

@@ -25,7 +25,9 @@ describe("onlineChanges", () => {
         { path: "fig/b.png", kind: "asset", hash: "cc", size: 1, type: "image/png" },
       ],
     );
-    expect(changes.map((c) => [c.path, c.status, c.addedLines, c.removedLines])).toEqual([
+    expect(
+      changes.map((c) => [c.path, c.status, c.addedLines, c.removedLines]),
+    ).toEqual([
       ["fig/b.png", "modified", 0, 0],
       ["gone.tex", "removed", 0, 1],
       ["main.tex", "modified", 1, 1],

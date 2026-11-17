@@ -1,5 +1,6 @@
 import { Facet, StateEffect, StateField } from "@codemirror/state";
-import { EditorView, showTooltip, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
+import { showTooltip, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import katex from "katex";
 import {
   findMathRegion,

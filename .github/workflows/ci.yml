@@ -1,16 +1,17 @@
 name: CI
 
+# Scholarkit mirrors its main here, and a branch by hand as scholarkit/<branch>.
 on:
   push:
-    branches: [main]
+    branches: [main, "scholarkit/**"]
   pull_request:
-  workflow_call:
   workflow_dispatch:
 
-# A new push to a pull request cancels its older runs. Other runs get
-# a group of their own and always finish: Release needs main green.
+# A new push to a pull request or a scholarkit/ branch cancels its older
+# runs. Runs on main get a group of their own and always finish: a release
+# needs main green.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: ci-${{ github.ref != 'refs/heads/main' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:

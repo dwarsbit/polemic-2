@@ -177,7 +177,13 @@ async function runCompile(
     const error = compileError(e);
     // Stopped for the queued follow-up, which sets the state itself.
     if (error.kind === "cancelled") return;
-    set({ status: "error", error: error.message, errorKind: error.kind, issues: [], log: null });
+    set({
+      status: "error",
+      error: error.message,
+      errorKind: error.kind,
+      issues: [],
+      log: null,
+    });
   }
 }
 

@@ -9,6 +9,8 @@
 
 #![allow(dead_code)]
 
+#[path = "../../../../src-tauri/src/errors.rs"]
+mod errors;
 #[path = "../../../../src-tauri/src/excludes.rs"]
 mod excludes;
 #[path = "../../../../src-tauri/src/logparse.rs"]
@@ -29,13 +31,21 @@ use std::path::Path;
 /// As cloud_compile::sendable.
 fn sendable(path: &str) -> bool {
     path.len() <= 1024
-        && !path.chars().any(|c| c < '\u{20}' || c == '\u{7f}' || c == '\\')
+        && !path
+            .chars()
+            .any(|c| c < '\u{20}' || c == '\u{7f}' || c == '\\')
         && path.split('/').all(|segment| segment.len() <= 255)
 }
 
 /// As cloud_compile::walk, without hashing or the project size limit
 /// (the compile service applies its own).
-fn walk(root: &Path, folder: &Path, rel: &str, excluder: &mut excludes::Excluder, out: &mut Vec<String>) {
+fn walk(
+    root: &Path,
+    folder: &Path,
+    rel: &str,
+    excluder: &mut excludes::Excluder,
+    out: &mut Vec<String>,
+) {
     let gitignore = fs::read_to_string(folder.join(".gitignore")).ok();
     if let Some(text) = &gitignore {
         excluder.push(rel, text);
@@ -45,7 +55,11 @@ fn walk(root: &Path, folder: &Path, rel: &str, excluder: &mut excludes::Excluder
             let Some(name) = entry.file_name().to_str().map(str::to_string) else {
                 continue;
             };
-            let path = if rel.is_empty() { name } else { format!("{rel}/{name}") };
+            let path = if rel.is_empty() {
+                name
+            } else {
+                format!("{rel}/{name}")
+            };
             let Ok(kind) = entry.file_type() else {
                 continue;
             };
@@ -82,7 +96,9 @@ fn walk(root: &Path, folder: &Path, rel: &str, excluder: &mut excludes::Excluder
 }
 
 fn read(path: &str) -> String {
-    fs::read(path).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default()
+    fs::read(path)
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+        .unwrap_or_default()
 }
 
 fn main() {
@@ -91,7 +107,13 @@ fn main() {
         Some("files") if args.len() == 2 => {
             let root = fs::canonicalize(&args[1]).expect("project folder");
             let mut out = Vec::new();
-            walk(&root, &root, "", &mut excludes::Excluder::default(), &mut out);
+            walk(
+                &root,
+                &root,
+                "",
+                &mut excludes::Excluder::default(),
+                &mut out,
+            );
             out.sort();
             println!("{}", serde_json::to_string(&out).unwrap());
         }
@@ -100,7 +122,9 @@ fn main() {
             let root = fs::canonicalize(&args[1]).expect("project folder");
             let in_project = |rel: &str| {
                 let path = fs::canonicalize(root.join(rel)).ok()?;
-                path.starts_with(&root).then(|| fs::read_to_string(path).ok()).flatten()
+                path.starts_with(&root)
+                    .then(|| fs::read_to_string(path).ok())
+                    .flatten()
             };
             let main = args[2].as_str();
             let engine = profile::resolve_in_project(
@@ -115,7 +139,8 @@ fn main() {
             // As compile_outcome plus the font hints of a server compile.
             let mut issues = logparse::parse_issues(&read(&args[1]));
             let blg = args.get(3).map(|p| read(p)).filter(|t| !t.is_empty());
-            if let Some(failure) = logparse::parse_bib_tool_failure(&read(&args[2]), blg.as_deref()) {
+            if let Some(failure) = logparse::parse_bib_tool_failure(&read(&args[2]), blg.as_deref())
+            {
                 issues.retain(|issue| !logparse::is_rerun_bib_tool_warning(issue));
                 issues.insert(0, failure);
             }

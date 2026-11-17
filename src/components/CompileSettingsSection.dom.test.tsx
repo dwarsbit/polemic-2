@@ -17,7 +17,12 @@ vi.mock("@/lib/tauri", () => ({
     compileProvider: provider,
   })),
   cancelCompile: vi.fn(async () => {}),
-  compileProject: vi.fn(async () => ({ success: false, issues: [], log: "", engine: "pdflatex" })),
+  compileProject: vi.fn(async () => ({
+    success: false,
+    issues: [],
+    log: "",
+    engine: "pdflatex",
+  })),
   getPdf: vi.fn(async () => new Uint8Array()),
   setPreviewZoom: vi.fn(async () => {}),
 }));
@@ -122,7 +127,9 @@ describe("CompileSettingsSection", () => {
     account.cloud = "disabled";
     useSettingsStore.setState({ compileProvider: "polemic" });
     await render(<CompileSettingsSection />);
-    expect(host.textContent).toContain("https://polemic.example.org has no cloud compile");
+    expect(host.textContent).toContain(
+      "https://polemic.example.org has no cloud compile",
+    );
     expect(button("With Polemic").disabled).toBe(false);
     await click("On this computer");
     expect(tauri.setCompileProvider).toHaveBeenCalledWith("local");

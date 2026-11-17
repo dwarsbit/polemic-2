@@ -238,16 +238,17 @@ pub fn effective(app: &AppHandle) -> Result<Settings, String> {
 
 pub fn upsert_recent(settings: &mut Settings, name: &str, path: &str) {
     settings.recent_projects.retain(|r| r.path != path);
-    settings
-        .recent_projects
-        .insert(0, RecentProject {
+    settings.recent_projects.insert(
+        0,
+        RecentProject {
             name: name.to_string(),
             path: path.to_string(),
             opened_at: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .ok()
                 .map(|d| d.as_millis() as u64),
-        });
+        },
+    );
     settings.recent_projects.truncate(20);
 }
 
@@ -289,7 +290,10 @@ pub fn new_source_id() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("bib-{nanos:x}-{:x}", COUNTER.fetch_add(1, Ordering::Relaxed))
+    format!(
+        "bib-{nanos:x}-{:x}",
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    )
 }
 
 #[cfg(test)]
@@ -335,7 +339,10 @@ mod tests {
             bib("b", &dir.join("folder").to_string_lossy()),
         ];
         assert!(bib_source_covers(&sources, &base.join("one.bib")));
-        assert!(bib_source_covers(&sources, &base.join("folder/sub/deep.bib")));
+        assert!(bib_source_covers(
+            &sources,
+            &base.join("folder/sub/deep.bib")
+        ));
         assert!(!bib_source_covers(&sources, &base.join("other.bib")));
         assert!(!bib_source_covers(&sources, &base));
         let _ = fs::remove_dir_all(&dir);

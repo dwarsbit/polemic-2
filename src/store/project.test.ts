@@ -319,7 +319,10 @@ describe("choosing the main file", () => {
     const other = folder("/r");
     other.clear();
     other.set("chapters/intro.tex", "\\chapter{Intro}");
-    other.set("thesis.tex", "% a comment\n\\documentclass{book}\n\\begin{document}\\end{document}");
+    other.set(
+      "thesis.tex",
+      "% a comment\n\\documentclass{book}\n\\begin{document}\\end{document}",
+    );
     await useProjectStore.getState().openProject("/r");
     expect(useProjectStore.getState().mainFile).toBe("thesis.tex");
   });

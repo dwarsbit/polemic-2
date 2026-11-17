@@ -43,7 +43,9 @@ pub enum PullOutcome {
     /// New commits came in (a fast-forward or a clean merge).
     Updated,
     /// The merge stopped on these paths; resolve, stage, commit.
-    Conflicts { paths: Vec<String> },
+    Conflicts {
+        paths: Vec<String>,
+    },
 }
 
 /// The name of the one remote Polemic manages.
@@ -131,8 +133,12 @@ fn runs_command(key: &str) -> bool {
 fn redirects_transport(key: &str) -> bool {
     let key = key.to_ascii_lowercase();
     key == "core.gitproxy"
-        || (key.starts_with("remote.") && [".uploadpack", ".receivepack", ".vcs"].iter().any(|s| key.ends_with(s)))
-        || (key.starts_with("url.") && (key.ends_with(".insteadof") || key.ends_with(".pushinsteadof")))
+        || (key.starts_with("remote.")
+            && [".uploadpack", ".receivepack", ".vcs"]
+                .iter()
+                .any(|s| key.ends_with(s)))
+        || (key.starts_with("url.")
+            && (key.ends_with(".insteadof") || key.ends_with(".pushinsteadof")))
 }
 
 /// `-c` overrides that blank every command-running key the repository
@@ -258,7 +264,11 @@ fn run_git(dir: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 fn run_remote_git(dir: &Path, credentials: Credentials, args: &[&str]) -> Result<String, String> {
-    if let Some(key) = local_config_keys(dir).lines().map(str::trim).find(|k| redirects_transport(k)) {
+    if let Some(key) = local_config_keys(dir)
+        .lines()
+        .map(str::trim)
+        .find(|k| redirects_transport(k))
+    {
         return Err(format!(
             "The repository config sets {key}, which can run a program on fetch or push. \
              Remove it from .git/config to use the remote."
@@ -293,9 +303,7 @@ fn parse_status(output: &str) -> GitStatusInfo {
     let mut info = GitStatusInfo::default();
     for line in output.lines() {
         if let Some(branch_line) = line.strip_prefix("## ") {
-            let (name, rest) = branch_line
-                .split_once("...")
-                .unwrap_or((branch_line, ""));
+            let (name, rest) = branch_line.split_once("...").unwrap_or((branch_line, ""));
             if let Some(branch) = name.strip_prefix("No commits yet on ") {
                 info.branch = Some(branch.to_string());
             } else if name != "No branch" {
@@ -469,7 +477,11 @@ fn current_branch(dir: &Path) -> Result<String, String> {
 }
 
 fn has_upstream(dir: &Path) -> bool {
-    run_git(dir, &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).is_ok()
+    run_git(
+        dir,
+        &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+    )
+    .is_ok()
 }
 
 pub fn fetch(dir: &Path, credentials: Credentials) -> Result<(), String> {
@@ -484,7 +496,9 @@ pub fn fetch(dir: &Path, credentials: Credentials) -> Result<(), String> {
 pub fn pull(dir: &Path, credentials: Credentials) -> Result<PullOutcome, String> {
     need_remote(dir)?;
     if merge_in_progress(dir) {
-        return Err("A merge is in progress. Resolve the conflicts and commit, or abort the merge.".into());
+        return Err(
+            "A merge is in progress. Resolve the conflicts and commit, or abort the merge.".into(),
+        );
     }
     let branch = current_branch(dir)?;
     let before = head(dir);
@@ -581,7 +595,10 @@ pub fn mark_resolved(dir: &Path, path: &str, file: Option<&Path>) -> Result<(), 
 pub fn clone(url: &str, dest: &Path, credentials: Credentials) -> Result<(), String> {
     let url = check_remote_url(url)?;
     if dest.exists() {
-        return Err(format!("{} already exists. Choose another name.", dest.display()));
+        return Err(format!(
+            "{} already exists. Choose another name.",
+            dest.display()
+        ));
     }
     let parent = dest
         .parent()
@@ -600,7 +617,9 @@ pub fn has_commits(dir: &Path) -> bool {
 }
 
 fn head(dir: &Path) -> Option<String> {
-    run_git(dir, &["rev-parse", "HEAD"]).ok().map(|h| h.trim().to_string())
+    run_git(dir, &["rev-parse", "HEAD"])
+        .ok()
+        .map(|h| h.trim().to_string())
 }
 
 /// Git's remote errors, in the words of the panel.
@@ -621,10 +640,13 @@ fn friendly_remote_error(stderr: &str) -> String {
     } else if lower.contains("fetch first") || lower.contains("non-fast-forward") {
         "The remote has commits you don't have yet. Pull first, then push.".into()
     } else if lower.contains("would be overwritten by merge") {
-        "Pulling would overwrite changes you haven't committed. Commit or discard them first.".into()
+        "Pulling would overwrite changes you haven't committed. Commit or discard them first."
+            .into()
     } else if lower.contains("could not resolve host") || lower.contains("could not connect") {
         "Could not reach the remote. Check your internet connection.".into()
-    } else if lower.contains("repository not found") || lower.contains("does not appear to be a git repository") {
+    } else if lower.contains("repository not found")
+        || lower.contains("does not appear to be a git repository")
+    {
         "The remote repository wasn't found. Check the remote URL and that your account may open it.".into()
     } else {
         stderr.to_string()
@@ -691,11 +713,7 @@ pub fn log(dir: &Path, limit: u32) -> Result<Vec<GitCommitInfo>, String> {
     let format = "%H%x1f%s%x1f%an%x1f%at";
     let output = run_git(
         dir,
-        &[
-            "log",
-            &format!("-{limit}"),
-            &format!("--format={format}"),
-        ],
+        &["log", &format!("-{limit}"), &format!("--format={format}")],
     )?;
     let mut commits = Vec::new();
     for line in output.lines() {
@@ -723,6 +741,18 @@ pub fn show_head(dir: &Path, path: &str) -> Result<Option<String>, String> {
     }
 }
 
+/// Files ignored by git (via .gitignore), for file-list coloring.
+pub fn ignored(dir: &Path) -> Vec<String> {
+    match run_git(dir, &["status", "--porcelain", "--ignored"]) {
+        Ok(output) => output
+            .lines()
+            .filter_map(|line| line.strip_prefix("!! "))
+            .map(str::to_string)
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -746,14 +776,19 @@ mod tests {
             "gpg.ssh.program=",
             "commit.gpgSign=false",
         ] {
-            assert!(overrides.iter().any(|o| o == expected), "missing {expected}: {overrides:?}");
+            assert!(
+                overrides.iter().any(|o| o == expected),
+                "missing {expected}: {overrides:?}"
+            );
         }
         assert!(overrides.iter().any(|o| o.starts_with("core.hooksPath=")));
         assert!(overrides.iter().any(|o| o == "protocol.ext.allow=never"));
         assert!(redirects_transport("remote.Origin.UploadPack"));
         assert!(redirects_transport("url.ext::sh.insteadOf"));
         assert!(!redirects_transport("remote.origin.url"));
-        assert!(!overrides.iter().any(|o| o.starts_with("user.name") || o.starts_with("core.bare")));
+        assert!(!overrides
+            .iter()
+            .any(|o| o.starts_with("user.name") || o.starts_with("core.bare")));
     }
 
     /// End to end: a repository whose config runs commands on `git status`.
@@ -767,7 +802,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let git = |args: &[&str]| {
-            Command::new("git").args(args).current_dir(&dir).output().unwrap();
+            Command::new("git")
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .unwrap();
         };
         git(&["init", "-q"]);
         std::fs::write(dir.join(".gitattributes"), "*.tex filter=evil\n").unwrap();
@@ -784,7 +823,18 @@ mod tests {
 
         let _ = status(&dir);
         let _ = stage(&dir, &["main.tex".into()]);
-        let _ = run_git(&dir, &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "m"]);
+        let _ = run_git(
+            &dir,
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-qm",
+                "m",
+            ],
+        );
         assert!(!marker.exists(), "repository config ran a command");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -810,7 +860,11 @@ mod tests {
 
         let marker = dir.join("PWNED");
         let git = |args: &[&str]| {
-            Command::new("git").args(args).current_dir(&dir).output().unwrap();
+            Command::new("git")
+                .args(args)
+                .current_dir(&dir)
+                .output()
+                .unwrap();
         };
         for (key, program) in [
             ("remote.origin.uploadpack", "git-upload-pack"),
@@ -825,7 +879,11 @@ mod tests {
             assert!(!marker.exists(), "{key} ran a command");
             git(&["config", "--unset", key]);
         }
-        git(&["config", &format!("url.ext::sh -c touch% {}.insteadOf", marker.display()), &bare_url]);
+        git(&[
+            "config",
+            &format!("url.ext::sh -c touch% {}.insteadOf", marker.display()),
+            &bare_url,
+        ]);
         assert!(fetch(&dir, None).is_err(), "insteadOf: fetch ran");
         assert!(!marker.exists(), "insteadOf ran a command");
         let _ = std::fs::remove_dir_all(&dir);
@@ -834,9 +892,14 @@ mod tests {
 
     #[test]
     fn parses_upstream_and_conflicts() {
-        let info = parse_status("## main...origin/main [ahead 1, behind 2]\nUU main.tex\nAA new.tex\nM  ok.tex\n");
+        let info = parse_status(
+            "## main...origin/main [ahead 1, behind 2]\nUU main.tex\nAA new.tex\nM  ok.tex\n",
+        );
         assert_eq!(info.upstream.as_deref(), Some("origin/main"));
-        assert_eq!(info.conflicts, vec!["main.tex".to_string(), "new.tex".to_string()]);
+        assert_eq!(
+            info.conflicts,
+            vec!["main.tex".to_string(), "new.tex".to_string()]
+        );
         assert_eq!(info.entries.len(), 1);
 
         let info = parse_status("## main...origin/main\n");
@@ -858,7 +921,14 @@ mod tests {
         ] {
             assert!(check_remote_url(ok).is_ok(), "{ok}");
         }
-        for bad in ["", "--upload-pack=evil", "C:\\paper", "/home/me/paper", "paper", "https://x y"] {
+        for bad in [
+            "",
+            "--upload-pack=evil",
+            "C:\\paper",
+            "/home/me/paper",
+            "paper",
+            "https://x y",
+        ] {
             assert!(check_remote_url(bad).is_err(), "{bad}");
         }
     }
@@ -892,7 +962,9 @@ mod tests {
     /// A file's text with git's line endings undone (Windows runners
     /// check out with autocrlf on).
     fn read(dir: &Path, path: &str) -> String {
-        std::fs::read_to_string(dir.join(path)).unwrap().replace("\r\n", "\n")
+        std::fs::read_to_string(dir.join(path))
+            .unwrap()
+            .replace("\r\n", "\n")
     }
 
     fn write_and_commit(dir: &Path, path: &str, content: &str, message: &str) {
@@ -935,7 +1007,10 @@ mod tests {
         configure_user(&b);
         assert_eq!(read(&b, "main.tex"), "one\n");
         assert_eq!(status(&b).upstream.as_deref(), Some("origin/main"));
-        assert!(clone(&bare_url, &b, None).is_err(), "clone over an existing folder");
+        assert!(
+            clone(&bare_url, &b, None).is_err(),
+            "clone over an existing folder"
+        );
 
         // A commits and pushes; B sees it after a fetch, takes it with a pull.
         write_and_commit(&a, "main.tex", "one\ntwo\n", "second");
@@ -964,7 +1039,9 @@ mod tests {
         write_and_commit(&b, "main.tex", "one\nB\n", "b's edit");
         assert_eq!(
             pull(&b, None).unwrap(),
-            PullOutcome::Conflicts { paths: vec!["main.tex".into()] }
+            PullOutcome::Conflicts {
+                paths: vec!["main.tex".into()]
+            }
         );
         let info = status(&b);
         assert!(info.merging);
@@ -986,7 +1063,10 @@ mod tests {
         write_and_commit(&a, "main.tex", "one\nAB\nA2\n", "a again");
         push(&a, None).unwrap();
         write_and_commit(&b, "main.tex", "one\nAB\nB2\n", "b again");
-        assert!(matches!(pull(&b, None).unwrap(), PullOutcome::Conflicts { .. }));
+        assert!(matches!(
+            pull(&b, None).unwrap(),
+            PullOutcome::Conflicts { .. }
+        ));
         abort_merge(&b).unwrap();
         let info = status(&b);
         assert!(!info.merging && info.conflicts.is_empty());
@@ -1005,7 +1085,9 @@ mod tests {
         let outcome = pull(&b, None).unwrap();
         assert_eq!(
             outcome,
-            PullOutcome::Conflicts { paths: vec!["a.tex".into(), "extra.tex".into(), "main.tex".into()] }
+            PullOutcome::Conflicts {
+                paths: vec!["a.tex".into(), "extra.tex".into(), "main.tex".into()]
+            }
         );
         let marked = mark_resolved(&b, "main.tex", Some(&b.join("main.tex"))).unwrap_err();
         assert!(marked.contains("conflict markers"), "{marked}");
@@ -1016,7 +1098,11 @@ mod tests {
         resolve_conflict(&b, "a.tex", ConflictSide::Theirs).unwrap();
         assert!(!b.join("a.tex").exists());
         let info = status(&b);
-        assert!(info.conflicts.is_empty() && info.merging, "{:?}", info.conflicts);
+        assert!(
+            info.conflicts.is_empty() && info.merging,
+            "{:?}",
+            info.conflicts
+        );
         commit(&b, "merged by sides").unwrap();
         assert!(!status(&b).merging);
         push(&b, None).unwrap();
@@ -1121,7 +1207,10 @@ mod tests {
 
     #[test]
     fn finds_conflict_markers() {
-        assert_eq!(conflict_marker_line("a\n<<<<<<< HEAD\nb\n=======\nc\n>>>>>>> origin\n"), Some(2));
+        assert_eq!(
+            conflict_marker_line("a\n<<<<<<< HEAD\nb\n=======\nc\n>>>>>>> origin\n"),
+            Some(2)
+        );
         assert_eq!(conflict_marker_line("a\n=======\nb\n"), None);
         assert_eq!(conflict_marker_line("a\n>>>>>>> origin/main\n"), Some(2));
         assert_eq!(conflict_marker_line("a\n\\hrule % =======\n"), None);
@@ -1146,10 +1235,38 @@ mod tests {
         assert_eq!(info.ahead, 1);
         assert_eq!(info.behind, 2);
         assert_eq!(info.entries.len(), 6);
-        assert_eq!(info.entries[0], GitEntry { path: "main.tex".into(), x: "M".into(), y: " ".into() });
-        assert_eq!(info.entries[1], GitEntry { path: "chapters/intro.tex".into(), x: " ".into(), y: "M".into() });
-        assert_eq!(info.entries[4], GitEntry { path: "renamed.tex".into(), x: "R".into(), y: " ".into() });
-        assert_eq!(info.entries[5], GitEntry { path: "notes.tex".into(), x: "?".into(), y: "?".into() });
+        assert_eq!(
+            info.entries[0],
+            GitEntry {
+                path: "main.tex".into(),
+                x: "M".into(),
+                y: " ".into()
+            }
+        );
+        assert_eq!(
+            info.entries[1],
+            GitEntry {
+                path: "chapters/intro.tex".into(),
+                x: " ".into(),
+                y: "M".into()
+            }
+        );
+        assert_eq!(
+            info.entries[4],
+            GitEntry {
+                path: "renamed.tex".into(),
+                x: "R".into(),
+                y: " ".into()
+            }
+        );
+        assert_eq!(
+            info.entries[5],
+            GitEntry {
+                path: "notes.tex".into(),
+                x: "?".into(),
+                y: "?".into()
+            }
+        );
     }
 
     #[test]
@@ -1196,7 +1313,14 @@ mod tests {
             .into_iter()
             .find(|entry| entry.path == "main.tex")
             .unwrap();
-        assert_eq!(staged_main, GitEntry { path: "main.tex".into(), x: "A".into(), y: " ".into() });
+        assert_eq!(
+            staged_main,
+            GitEntry {
+                path: "main.tex".into(),
+                x: "A".into(),
+                y: " ".into()
+            }
+        );
 
         stage(&dir, &[".gitignore".into()]).unwrap();
         commit(&dir, "first").unwrap();
@@ -1208,7 +1332,10 @@ mod tests {
         assert_eq!(log[0].author, "Test");
         assert!(log[0].timestamp_millis > 0);
 
-        assert_eq!(show_head(&dir, "main.tex").unwrap().as_deref(), Some("hello\n"));
+        assert_eq!(
+            show_head(&dir, "main.tex").unwrap().as_deref(),
+            Some("hello\n")
+        );
         assert_eq!(show_head(&dir, "missing.tex").unwrap(), None);
 
         // Staged-then-edited files appear in both lists (MM).
@@ -1224,17 +1351,5 @@ mod tests {
         assert_eq!(info.entries[0].y, "M");
 
         let _ = std::fs::remove_dir_all(&dir);
-    }
-}
-
-/// Files ignored by git (via .gitignore), for file-list coloring.
-pub fn ignored(dir: &Path) -> Vec<String> {
-    match run_git(dir, &["status", "--porcelain", "--ignored"]) {
-        Ok(output) => output
-            .lines()
-            .filter_map(|line| line.strip_prefix("!! "))
-            .map(str::to_string)
-            .collect(),
-        Err(_) => Vec::new(),
     }
 }

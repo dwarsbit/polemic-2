@@ -52,7 +52,11 @@ fn glob_to_regex(glob: &str) -> String {
                 let at_end = i + 2 == chars.len() || chars[i + 2] == '/';
                 if at_start && at_end {
                     // `**/` = any folders (or none); a trailing `**` = everything inside.
-                    out.push_str(if i + 2 == chars.len() { ".*" } else { "(?:.*/)?" });
+                    out.push_str(if i + 2 == chars.len() {
+                        ".*"
+                    } else {
+                        "(?:.*/)?"
+                    });
                     i += 3;
                     continue;
                 }
@@ -62,7 +66,12 @@ fn glob_to_regex(glob: &str) -> String {
             out.push_str("[^/]");
         } else if c == '[' {
             let close = (i + 2 < chars.len())
-                .then(|| chars[i + 2..].iter().position(|&ch| ch == ']').map(|p| p + i + 2))
+                .then(|| {
+                    chars[i + 2..]
+                        .iter()
+                        .position(|&ch| ch == ']')
+                        .map(|p| p + i + 2)
+                })
                 .flatten();
             let Some(close) = close else {
                 out.push_str(r"\[");
@@ -99,7 +108,10 @@ fn glob_to_regex(glob: &str) -> String {
 fn trim_line(raw: &str) -> &str {
     let trimmed = raw.trim_end();
     if trimmed.ends_with('\\') && trimmed.len() < raw.len() {
-        let next = raw[trimmed.len()..].chars().next().map_or(0, char::len_utf8);
+        let next = raw[trimmed.len()..]
+            .chars()
+            .next()
+            .map_or(0, char::len_utf8);
         &raw[..trimmed.len() + next]
     } else {
         trimmed
@@ -195,7 +207,10 @@ impl Excluder {
             let local = if rule.base.is_empty() {
                 path
             } else {
-                match path.strip_prefix(&rule.base).and_then(|p| p.strip_prefix('/')) {
+                match path
+                    .strip_prefix(&rule.base)
+                    .and_then(|p| p.strip_prefix('/'))
+                {
                     Some(local) => local,
                     None => continue,
                 }
@@ -261,7 +276,8 @@ mod tests {
     #[test]
     fn follows_the_shared_cases() {
         let cases: Cases =
-            serde_json::from_str(include_str!("../../src/lib/project-excludes.cases.json")).unwrap();
+            serde_json::from_str(include_str!("../../src/lib/project-excludes.cases.json"))
+                .unwrap();
         assert_eq!(cases.max_file_bytes, MAX_FILE_BYTES);
         for group in cases.groups {
             let gitignores: Vec<(&str, &str)> = group

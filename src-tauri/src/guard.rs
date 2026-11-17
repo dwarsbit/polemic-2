@@ -27,7 +27,10 @@ pub fn forget(dir: &Path) {
 }
 
 pub fn is_allowed(dir: &Path) -> bool {
-    allowed().lock().map(|set| set.contains(dir)).unwrap_or(false)
+    allowed()
+        .lock()
+        .map(|set| set.contains(dir))
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

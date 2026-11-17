@@ -32,12 +32,18 @@ fn validate_id(id: &str) -> Result<(), String> {
 }
 
 fn copy_failed(path: &Path, e: &std::io::Error) -> String {
-    crate::errors::failed(format_args!("Could not copy {} for the snapshot", path.display()), e)
+    crate::errors::failed(
+        format_args!("Could not copy {} for the snapshot", path.display()),
+        e,
+    )
 }
 
 fn replace_failed(path: &Path, e: &std::io::Error) -> String {
     crate::errors::failed(
-        format_args!("Could not replace {} with the snapshot's copy", path.display()),
+        format_args!(
+            "Could not replace {} with the snapshot's copy",
+            path.display()
+        ),
         e,
     )
 }
@@ -52,7 +58,9 @@ fn copy_dir_recursive(src: &Path, dst: &Path, skip_top_level: &[&str]) -> Result
         if skip_top_level.contains(&name.as_str()) {
             continue;
         }
-        let file_type = entry.file_type().map_err(|e| copy_failed(&entry.path(), &e))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| copy_failed(&entry.path(), &e))?;
         let target = dst.join(entry.file_name());
         if file_type.is_symlink() {
             continue;
@@ -71,7 +79,11 @@ pub fn create(dir: &Path) -> Result<SnapshotInfo, String> {
     let mut millis = now_millis();
     // Two snapshots in the same millisecond (a restore's safety snapshot
     // right after a manual one) must not share a folder.
-    while dir.join(".snapshots").join(format!("snap-{millis}")).exists() {
+    while dir
+        .join(".snapshots")
+        .join(format!("snap-{millis}"))
+        .exists()
+    {
         millis += 1;
     }
     let id = format!("snap-{millis}");
@@ -100,7 +112,7 @@ pub fn list(dir: &Path) -> Vec<SnapshotInfo> {
             });
         }
     }
-    out.sort_by(|a, b| b.created_at_millis.cmp(&a.created_at_millis));
+    out.sort_by_key(|s| std::cmp::Reverse(s.created_at_millis));
     out
 }
 
@@ -120,11 +132,9 @@ pub fn restore(dir: &Path, id: &str) -> Result<(), String> {
         }
         let path = entry.path();
         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-            fs::remove_dir_all(&path)
-                .map_err(|e| replace_failed(&path, &e))?;
+            fs::remove_dir_all(&path).map_err(|e| replace_failed(&path, &e))?;
         } else {
-            fs::remove_file(&path)
-                .map_err(|e| replace_failed(&path, &e))?;
+            fs::remove_file(&path).map_err(|e| replace_failed(&path, &e))?;
         }
     }
     // Older snapshots may still carry a .git copy; never restore it.
@@ -149,7 +159,9 @@ fn collect_files(dir: &Path, skip_top_level: &[&str], out: &mut BTreeMap<String,
     };
     for entry in read.filter_map(Result::ok) {
         let name = entry.file_name().to_string_lossy().to_string();
-        let Ok(file_type) = entry.file_type() else { continue };
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         if file_type.is_dir() {
             // Only the project root has EXCLUDED entries skipped,
             // mirroring what `create` copies into a snapshot.
@@ -342,7 +354,12 @@ mod tests {
         changes.sort_by(|a, b| a.path.cmp(&b.path));
         let by_path: std::collections::HashMap<_, _> = changes
             .iter()
-            .map(|c| (c.path.as_str(), (c.status.as_str(), c.added_lines, c.removed_lines)))
+            .map(|c| {
+                (
+                    c.path.as_str(),
+                    (c.status.as_str(), c.added_lines, c.removed_lines),
+                )
+            })
             .collect();
 
         assert_eq!(by_path.len(), 3);

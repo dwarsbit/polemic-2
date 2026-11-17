@@ -72,7 +72,10 @@ pub fn write_text_if(target: &Path, text: &str, expected: Option<&str>) -> Resul
         Ok(bytes) => Some(bytes),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => {
-            return Err(crate::errors::failed(format_args!("Could not open {}", target.display()), &e))
+            return Err(crate::errors::failed(
+                format_args!("Could not open {}", target.display()),
+                &e,
+            ))
         }
     };
     let unchanged = match (&current, expected) {
@@ -92,8 +95,9 @@ pub fn write_text_if(target: &Path, text: &str, expected: Option<&str>) -> Resul
         fs::create_dir_all(parent)
             .map_err(|e| crate::errors::failed("Could not create the folder", &e))?;
     }
-    crate::files::write_atomic(target, text.as_bytes())
-        .map_err(|e| crate::errors::failed(format_args!("Could not save {}", target.display()), &e))?;
+    crate::files::write_atomic(target, text.as_bytes()).map_err(|e| {
+        crate::errors::failed(format_args!("Could not save {}", target.display()), &e)
+    })?;
     Ok(true)
 }
 
@@ -201,8 +205,12 @@ pub async fn link_write_asset(
         fs::create_dir_all(parent)
             .map_err(|e| crate::errors::failed("Could not create the folder", &e))?;
     }
-    crate::files::write_atomic(&target, &bytes)
-        .map_err(|e| ShareError::from(crate::errors::failed(format_args!("Could not save {path}"), &e)))
+    crate::files::write_atomic(&target, &bytes).map_err(|e| {
+        ShareError::from(crate::errors::failed(
+            format_args!("Could not save {path}"),
+            &e,
+        ))
+    })
 }
 
 /// Moves a file the server moved. A file already at the target is
@@ -273,7 +281,8 @@ const SYSTEM_FILES: [&str; 3] = [".DS_Store", "Thumbs.db", "desktop.ini"];
 /// account only goes into such a folder, so nothing on disk can clash
 /// with what the first sync writes.
 pub fn is_empty_folder(dir: &Path) -> Result<bool, String> {
-    let entries = fs::read_dir(dir).map_err(|e| crate::errors::failed("Could not open the folder", &e))?;
+    let entries =
+        fs::read_dir(dir).map_err(|e| crate::errors::failed("Could not open the folder", &e))?;
     for entry in entries {
         let name = entry
             .map_err(|e| crate::errors::failed("Could not open the folder", &e))?
@@ -321,7 +330,8 @@ pub async fn link_open_account_project(
             return Ok(None);
         };
         let path = picked.into_path().map_err(|e| e.to_string())?;
-        let dir = fs::canonicalize(&path).map_err(|e| crate::errors::failed("Could not open the folder", &e))?;
+        let dir = fs::canonicalize(&path)
+            .map_err(|e| crate::errors::failed("Could not open the folder", &e))?;
         if !is_empty_folder(&dir)? {
             return Err(ShareError::from(
                 "That folder already has files in it. Choose a new or empty folder.".to_string(),

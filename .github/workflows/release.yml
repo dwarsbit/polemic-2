@@ -1,19 +1,17 @@
 name: Release
 
-# Releases the version of the "## X.Y.Z (unreleased)" heading in
-# CHANGELOG.md: sets the version everywhere, commits to main and pushes
-# the tag vX.Y.Z, creates a draft GitHub Release with the version's
-# changelog section as notes, then builds the installers for every
-# platform and attaches them to it. Once every build has succeeded, the
-# publish job publishes the release as the latest one, not a draft or a
-# pre-release. If any step fails after the push, the rollback job
-# deletes the draft and the tag and reverts the release commit, so the
-# workflow can run again once the cause is fixed. Pushes use GITHUB_TOKEN,
-# so they do not trigger other workflows: anything a release needs runs as
-# a job here.
+# Builds the installers of a version and publishes its GitHub Release. Scholarkit's Polemic
+# release workflow starts it: it sets the version, mirrors the release commit here and pushes
+# the tag vX.Y.Z, which runs this. See docs/releasing.md.
+#
+# The release is a draft, with the version's changelog section as notes, until the
+# installers for every platform are attached; then it is published as the latest one. If a
+# build fails, the draft and the tag stay: re-run the failed jobs. Deleting the draft and the
+# tag here doesn't undo the release commit in Scholarkit.
 
 on:
-  workflow_dispatch:
+  push:
+    tags: ["v*"]
 
 concurrency:
   group: release
@@ -27,96 +25,39 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      actions: read
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      commit: ${{ steps.push.outputs.commit }}
       release-id: ${{ steps.release.outputs.id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
     steps:
-      - name: Release from main only
-        if: github.ref != 'refs/heads/main'
+      # Windows installers (MSI) only take numeric versions, so no pre-releases.
+      - name: Check the tag
         run: |
-          echo "::error::Run this workflow from main (got ${GITHUB_REF})."
-          exit 1
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid tag '$TAG': expected vX.Y.Z"
+            exit 1
+          fi
 
       - uses: actions/checkout@v7
-        with:
-          ref: main
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - name: Read the version from the changelog
-        id: version
-        run: |
-          versions=$(sed -nE 's/^## (.+) \(unreleased\)$/\1/p' CHANGELOG.md)
-          if [ -z "$versions" ]; then
-            echo "::error::CHANGELOG.md has no '## X.Y.Z (unreleased)' heading."
-            exit 1
-          fi
-          if [ "$(echo "$versions" | wc -l)" -ne 1 ]; then
-            echo "::error::CHANGELOG.md has more than one unreleased version: $(echo $versions)"
-            exit 1
-          fi
-          echo "VERSION=$versions" >> "$GITHUB_ENV"
-          echo "version=$versions" >> "$GITHUB_OUTPUT"
-          echo "Releasing $versions"
-
-      # Windows installers (MSI) only take numeric versions, so no pre-releases.
-      - name: Validate the version
-        run: |
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Invalid version '$VERSION': expected X.Y.Z"
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
-            echo "::error::Tag v$VERSION already exists."
-            exit 1
-          fi
-
-      # Any CI run of this commit on main counts: a push, or the run the
-      # rollback job starts after reverting a failed release.
-      - name: Require green CI on main
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          sha=$(git rev-parse HEAD)
-          conclusion=$(gh run list --workflow ci.yml --branch main --commit "$sha" \
-            --limit 1 --json status,conclusion \
-            --jq '.[0] | if . == null then "missing" elif .status != "completed" then .status else .conclusion end')
-          if [ "$conclusion" != "success" ]; then
-            echo "::error::CI on $sha is '$conclusion', not 'success'."
-            exit 1
-          fi
-
-      - name: Bump the version
-        run: python scripts/bump_version.py "$VERSION"
-
-      - name: Commit, tag and push
-        id: push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "chore: release v$VERSION"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push --atomic origin HEAD:main "v$VERSION"
-          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
+      # A re-run finds the draft of its first run.
       - name: Create the draft GitHub Release
         id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          # The release notes are the version's section of the changelog.
-          awk -v v="$VERSION" '
-            $0 ~ "^## v?" v "( |$)" { found = 1; next }
-            found && /^## / { exit }
-            found { print }
-          ' CHANGELOG.md > notes.md
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
-            -f tag_name="v$VERSION" -f name="Polemic v$VERSION" \
-            -F body=@notes.md -F draft=true --jq .id)
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\" and .draft) | .id" | head -n 1)
+          if [ -z "$id" ]; then
+            # The release notes are the version's section of the changelog.
+            awk -v v="${TAG#v}" '
+              $0 ~ "^## v?" v "( |$)" { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md > notes.md
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$TAG" -f name="Polemic $TAG" \
+              -F body=@notes.md -F draft=true --jq .id)
+          fi
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   build:
@@ -141,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: v${{ needs.prepare.outputs.version }}
+          ref: ${{ github.ref }}
 
       # Signs and notarizes the macOS builds once the APPLE_* secrets exist;
       # without them the builds stay unsigned. Exported only when set, since
@@ -227,44 +168,3 @@ jobs:
         run: |
           gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
             -F draft=false -F prerelease=false -f make_latest=true --silent
-
-  # Undoes a release that failed or was cancelled after its commit and tag
-  # were pushed: deletes the draft GitHub Release (with any installers
-  # already attached) and the tag, and reverts the release commit on main
-  # so the changelog heading is unreleased again. Its pushes trigger no
-  # workflows, so it starts CI on the revert for the next release.
-  rollback:
-    needs: [prepare, build, publish]
-    if: (failure() || cancelled()) && needs.prepare.outputs.commit != ''
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      VERSION: ${{ needs.prepare.outputs.version }}
-      COMMIT: ${{ needs.prepare.outputs.commit }}
-      RELEASE_ID: ${{ needs.prepare.outputs.release-id }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 50
-
-      - name: Delete the draft GitHub Release
-        if: env.RELEASE_ID != ''
-        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
-
-      - name: Delete the tag
-        run: git push origin ":refs/tags/v$VERSION"
-
-      - name: Revert the release commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git revert --no-edit "$COMMIT"
-          git commit --amend -m "chore: revert the failed release v$VERSION" -m "This reverts commit $COMMIT."
-          git push origin HEAD:main
-
-      - name: Run CI on the revert
-        run: gh workflow run ci.yml --ref main

@@ -21,9 +21,10 @@ so sign in through `/api/auth/sign-in/email` instead. An answer that isn't
 the API's JSON, such as the app's own page from a proxy that sends `/api`
 to the wrong container, fails with a message rather than a parse error.
 
-The image in `docker/web` serves the build with Caddy; the Web image
-workflow pushes it to `ghcr.io/dwarsbit/polemic-web` from main, and
-polemic-server's Compose stack routes `/projects` to it.
+The image in `docker/web` serves the build with Caddy. In the Scholarkit
+repository, the Polemic web image workflow pushes it to
+`ghcr.io/dwarsbit/scholarkit-polemic-web` from main, and the services' Compose
+stack routes `/projects` to it.
 
 ## How it works
 

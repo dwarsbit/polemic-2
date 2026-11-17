@@ -99,7 +99,9 @@ function findFile(entries: api.FileEntry[], path: string): boolean {
 
 /** Every .tex file, the ones nearest the project root first. */
 function texFiles(entries: api.FileEntry[]): string[] {
-  const here = entries.filter((e) => !e.isDir && e.path.endsWith(".tex")).map((e) => e.path);
+  const here = entries
+    .filter((e) => !e.isDir && e.path.endsWith(".tex"))
+    .map((e) => e.path);
   const nested = entries.filter((e) => e.isDir).flatMap((e) => texFiles(e.children));
   return [...here, ...nested];
 }
@@ -112,7 +114,10 @@ const MAIN_FILE_CANDIDATES = 50;
  * the root, then by name) with a \documentclass, which rules out the
  * chapters, else the first .tex file at all.
  */
-async function detectMainFile(dir: string, entries: api.FileEntry[]): Promise<string | null> {
+async function detectMainFile(
+  dir: string,
+  entries: api.FileEntry[],
+): Promise<string | null> {
   const candidates = texFiles(entries);
   for (const path of candidates.slice(0, MAIN_FILE_CANDIDATES)) {
     try {
@@ -262,7 +267,10 @@ export const useProjectStore = create<ProjectState>((set, get) => {
 
   /** Write unsaved edits before the project leaves the store. If that
    *  fails, ask whether to go on and lose them; true to go on. */
-  async function saveBeforeLeaving(question: string, okLabel: string): Promise<boolean> {
+  async function saveBeforeLeaving(
+    question: string,
+    okLabel: string,
+  ): Promise<boolean> {
     try {
       await get().flushBuffers();
       return true;
@@ -898,7 +906,8 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         mainFile: moved(get().mainFile),
         lastSavedContent: nextSaved,
         ...changes.reduce(
-          (meta, c) => (c.kind === "move" ? moveFileMetadata(meta, c.from, c.to) : meta),
+          (meta, c) =>
+            c.kind === "move" ? moveFileMetadata(meta, c.from, c.to) : meta,
           get() as FileMetadata,
         ),
       });

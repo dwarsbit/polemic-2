@@ -41,8 +41,9 @@ pub fn local_get(path: &str, query: &str) -> Result<String, String> {
     if !path_ok || !query_ok {
         return Err("invalid Zotero request".into());
     }
-    let mut stream = TcpStream::connect(HOST)
-        .map_err(|_| "Could not reach Zotero. Check that Zotero is open on this computer.".to_string())?;
+    let mut stream = TcpStream::connect(HOST).map_err(|_| {
+        "Could not reach Zotero. Check that Zotero is open on this computer.".to_string()
+    })?;
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .map_err(|_| NO_ANSWER.to_string())?;
@@ -53,10 +54,14 @@ pub fn local_get(path: &str, query: &str) -> Result<String, String> {
         .write_all(request.as_bytes())
         .map_err(|_| NO_ANSWER.to_string())?;
     let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).map_err(|_| NO_ANSWER.to_string())?;
+    stream
+        .read_to_end(&mut raw)
+        .map_err(|_| NO_ANSWER.to_string())?;
     let (status, body) = parse_response(&raw)?;
     if !(200..300).contains(&status) {
-        return Err(format!("Zotero answered {status}. Check that Zotero is up to date."));
+        return Err(format!(
+            "Zotero answered {status}. Check that Zotero is up to date."
+        ));
     }
     Ok(body)
 }

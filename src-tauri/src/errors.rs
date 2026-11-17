@@ -78,8 +78,14 @@ mod tests {
             "Could not open figure.png: it wasn't found."
         );
         let full = io::Error::from(io::ErrorKind::StorageFull);
-        assert_eq!(why(&full), "the disk is full. Free some space and try again.");
-        let binary = io::Error::new(io::ErrorKind::InvalidData, "stream did not contain valid UTF-8");
+        assert_eq!(
+            why(&full),
+            "the disk is full. Free some space and try again."
+        );
+        let binary = io::Error::new(
+            io::ErrorKind::InvalidData,
+            "stream did not contain valid UTF-8",
+        );
         assert_eq!(why(&binary), "it isn't a text file.");
     }
 

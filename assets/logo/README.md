@@ -4,14 +4,14 @@ The Sheet logo: a white page with a slash on a primary tile (#623E64,
 oklch 42% 0.075 325), and "Polemic" in DM Sans Bold, outlined. Taken from
 the brand kit; the files are plain shapes, so they need no fonts or scripts.
 
-| Variant | File | Use |
-| --- | --- | --- |
-| Mark | `polemic-mark.svg` (currentColor), `polemic-mark-white.svg`, `polemic-mark-color.svg`, `polemic-mark-color-dark.svg` | One color, the page knocked out. Print, small sizes |
-| Logo (mark and name) | `polemic-lockup.svg`, `polemic-lockup-white.svg` (dark grounds), `polemic-lockup-mono.svg`, `polemic-lockup-mono-white.svg` | Website header, anywhere the name is needed |
-| App icon | `../app-icon.svg` (macOS, with the Dock shadow), `../app-icon-no-shadow.svg` (every other platform), `polemic-logo-flat.svg` (full bleed), `../../public/favicon.svg` | Dock, taskbar, favicon |
-| White app icon | `app-icon-white.svg` | On primary grounds, where the app icon disappears |
-| App icon and name, horizontal | `polemic-lockup-icon-horizontal.svg`, `-white` | Where the app icon and name sit on one line |
-| App icon and name, vertical | `polemic-lockup-icon-vertical.svg`, `-white` | Editor start screen and splash (`src/components/PolemicLogo.tsx`), READMEs |
+| Variant                       | File                                                                                                                                                                  | Use                                                                        |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Mark                          | `polemic-mark.svg` (currentColor), `polemic-mark-white.svg`, `polemic-mark-color.svg`, `polemic-mark-color-dark.svg`                                                  | One color, the page knocked out. Print, small sizes                        |
+| Logo (mark and name)          | `polemic-lockup.svg`, `polemic-lockup-white.svg` (dark grounds), `polemic-lockup-mono.svg`, `polemic-lockup-mono-white.svg`                                           | Website header, anywhere the name is needed                                |
+| App icon                      | `../app-icon.svg` (macOS, with the Dock shadow), `../app-icon-no-shadow.svg` (every other platform), `polemic-logo-flat.svg` (full bleed), `../../public/favicon.svg` | Dock, taskbar, favicon                                                     |
+| White app icon                | `app-icon-white.svg`                                                                                                                                                  | On primary grounds, where the app icon disappears                          |
+| App icon and name, horizontal | `polemic-lockup-icon-horizontal.svg`, `-white`                                                                                                                        | Where the app icon and name sit on one line                                |
+| App icon and name, vertical   | `polemic-lockup-icon-vertical.svg`, `-white`                                                                                                                          | Editor start screen and splash (`src/components/PolemicLogo.tsx`), READMEs |
 
 The Tauri icons in `src-tauri/icons` come from `pnpm tauri icon assets/app-icon-no-shadow.png`;
 `icon.icns` alone comes from `assets/app-icon.png`, which keeps the Dock shadow.

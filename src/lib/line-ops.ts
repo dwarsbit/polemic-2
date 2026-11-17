@@ -1,5 +1,7 @@
-import { EditorState, Prec } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import type { EditorState } from "@codemirror/state";
+import { Prec } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
+import { keymap } from "@codemirror/view";
 
 /**
  * The full extent of the line at pos, including its trailing newline

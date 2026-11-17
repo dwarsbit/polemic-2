@@ -22,8 +22,7 @@ pub fn check_base_url(base_url: &str) -> Result<(), String> {
 /// A service URL may use plain http only to this machine; `what` names
 /// it in the error ("the AI base URL").
 pub fn check_service_url(base_url: &str, what: &str) -> Result<(), String> {
-    let err =
-        || format!("{what} must start with https://. Plain http only works for localhost.");
+    let err = || format!("{what} must start with https://. Plain http only works for localhost.");
     // Parse rather than split by hand: `http://localhost@evil.example`
     // has evil.example as its host. Userinfo is refused outright, so a
     // credential never rides in the URL.
@@ -80,15 +79,13 @@ pub async fn ai_list_models(base_url: String, api_key: String) -> Result<Vec<Str
         .await
         .map_err(|e| crate::errors::no_answer("the AI provider", e.is_timeout()))?;
     let status = response.status();
-    let text = response
-        .text()
-        .await
-        .map_err(|_| UNREADABLE.to_string())?;
+    let text = response.text().await.map_err(|_| UNREADABLE.to_string())?;
     if !status.is_success() {
         return Err(provider_error(status, &text));
     }
-    let body: Value = serde_json::from_str(&text)
-        .map_err(|_| "The AI provider didn't answer with a list of models. Check the base URL.".to_string())?;
+    let body: Value = serde_json::from_str(&text).map_err(|_| {
+        "The AI provider didn't answer with a list of models. Check the base URL.".to_string()
+    })?;
     Ok(model_ids(&body))
 }
 
@@ -293,10 +290,7 @@ async fn run_turn(args: &AiAgentArgs, on_event: &Channel<AgentEvent>) -> Result<
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.starts_with("text/event-stream"));
     if !status.is_success() || !streamed {
-        let text = response
-            .text()
-            .await
-            .map_err(|_| UNREADABLE.to_string())?;
+        let text = response.text().await.map_err(|_| UNREADABLE.to_string())?;
         if !status.is_success() {
             return Err(provider_error(status, &text));
         }

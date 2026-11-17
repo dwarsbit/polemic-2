@@ -86,10 +86,12 @@ async fn post_form(
         .await
         .map_err(|e| crate::errors::no_answer(flow.provider, e.is_timeout()))?;
     let status = response.status();
-    response
-        .json()
-        .await
-        .map_err(|_| format!("{} gave an answer Polemic can't read ({status}). Try again in a moment.", flow.provider))
+    response.json().await.map_err(|_| {
+        format!(
+            "{} gave an answer Polemic can't read ({status}). Try again in a moment.",
+            flow.provider
+        )
+    })
 }
 
 fn tokens_of(body: &serde_json::Value) -> Option<Tokens> {
@@ -125,8 +127,12 @@ pub async fn request_device_code(flow: &Flow, client_id: &str) -> Result<DeviceC
             other => format!("{p} refused the sign-in ({other})."),
         });
     }
-    serde_json::from_value(body)
-        .map_err(|_| format!("{} gave an answer Polemic can't read. Try again in a moment.", flow.provider))
+    serde_json::from_value(body).map_err(|_| {
+        format!(
+            "{} gave an answer Polemic can't read. Try again in a moment.",
+            flow.provider
+        )
+    })
 }
 
 /// One poll's answer.
@@ -155,10 +161,14 @@ async fn poll_once(flow: &Flow, client_id: &str, device_code: &str) -> Result<Po
     match body.get("error").and_then(|e| e.as_str()) {
         Some("authorization_pending") => Ok(Poll::Pending),
         Some("slow_down") => Ok(Poll::SlowDown),
-        Some("expired_token") => Err("The code expired before it was entered. Sign in again.".into()),
+        Some("expired_token") => {
+            Err("The code expired before it was entered. Sign in again.".into())
+        }
         Some("access_denied") => Err(format!("The sign-in was cancelled on {p}.")),
         Some(other) => Err(format!("{p} refused the sign-in ({other}).")),
-        None => Err(format!("{p} gave an answer Polemic can't read. Try again in a moment.")),
+        None => Err(format!(
+            "{p} gave an answer Polemic can't read. Try again in a moment."
+        )),
     }
 }
 
@@ -302,8 +312,7 @@ mod tests {
         let (base, seen) = mock_server(Box::new(|_| {
             (200, r#"{"access_token":"a2","refresh_token":"r2","expires_in":7200,"token_type":"Bearer"}"#.into())
         }));
-        let tokens =
-            tauri::async_runtime::block_on(refresh(&flow(&base), "cid", "r1")).unwrap();
+        let tokens = tauri::async_runtime::block_on(refresh(&flow(&base), "cid", "r1")).unwrap();
         assert_eq!(
             tokens,
             Tokens {

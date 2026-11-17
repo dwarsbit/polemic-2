@@ -5,11 +5,12 @@ name: Smoke
 # launches the real app (window, webview, Rust backend).
 #
 # Pull requests run Windows only, since macOS runners are scarce.
-# Pushes to main and manual runs cover both.
+# Pushes (main, and branches from Scholarkit) and manual runs cover both.
 
+# Scholarkit mirrors its main here, and a branch by hand as scholarkit/<branch>.
 on:
   push:
-    branches: [main]
+    branches: [main, "scholarkit/**"]
   pull_request:
   workflow_dispatch:
 
@@ -17,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: smoke-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: smoke-${{ github.ref != 'refs/heads/main' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 env:

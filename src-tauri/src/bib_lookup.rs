@@ -81,7 +81,9 @@ pub async fn lookup_bibtex(app: tauri::AppHandle, doi: String) -> Result<String,
         .await
         .map_err(|_| "The lookup failed. Try again in a moment.".to_string())?;
     if !body.trim_start().starts_with('@') {
-        return Err("The registry has no BibTeX for that identifier. Add the entry by hand.".into());
+        return Err(
+            "The registry has no BibTeX for that identifier. Add the entry by hand.".into(),
+        );
     }
     Ok(body)
 }

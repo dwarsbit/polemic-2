@@ -90,17 +90,22 @@ export function CompileSettingsSection() {
         {provider === "local" ? (
           <>
             latexmk and your TeX distribution, below.{" "}
-            {usable && "With Polemic, the server compiles and nothing needs to be installed."}
+            {usable &&
+              "With Polemic, the server compiles and nothing needs to be installed."}
           </>
         ) : (
           <>
-            On {server}, with TeX Live and the same latexmk rules. Fonts installed
-            only on this computer are not there: put their files in the project.
-            Your plan sets the compile time you get each day.
+            On {server}, with TeX Live and the same latexmk rules. Fonts installed only
+            on this computer are not there: put their files in the project. Your plan
+            sets the compile time you get each day.
             {accountPage && (
               <>
                 {" "}
-                <button type="button" className={link} onClick={() => void openUrl(accountPage)}>
+                <button
+                  type="button"
+                  className={link}
+                  onClick={() => void openUrl(accountPage)}
+                >
                   See your usage
                 </button>
               </>
@@ -112,7 +117,11 @@ export function CompileSettingsSection() {
       {account !== null && !signedIn && (
         <p className="text-xs text-muted-foreground">
           Compiling with Polemic needs a free Polemic account.{" "}
-          <button type="button" className={link} onClick={() => openSettings("account")}>
+          <button
+            type="button"
+            className={link}
+            onClick={() => openSettings("account")}
+          >
             Sign in
           </button>{" "}
           first.
@@ -124,7 +133,11 @@ export function CompileSettingsSection() {
           {accountPage && (
             <>
               {" "}
-              <button type="button" className={link} onClick={() => void openUrl(accountPage)}>
+              <button
+                type="button"
+                className={link}
+                onClick={() => void openUrl(accountPage)}
+              >
                 See plans
               </button>
             </>

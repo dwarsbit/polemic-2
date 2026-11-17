@@ -168,7 +168,9 @@ impl<S: Store> Vault<S> {
             }
             Err(e) => {
                 self.unavailable.store(true, Ordering::Relaxed);
-                eprintln!("polemic: credential store unavailable, keeping API keys in settings.json: {e}");
+                eprintln!(
+                    "polemic: credential store unavailable, keeping API keys in settings.json: {e}"
+                );
                 settings.clone()
             }
         }
@@ -266,7 +268,10 @@ mod tests {
 
     #[test]
     fn keeps_keys_in_the_file_without_a_store() {
-        let vault = Vault::new(MemoryStore { broken: true, ..Default::default() });
+        let vault = Vault::new(MemoryStore {
+            broken: true,
+            ..Default::default()
+        });
         let disk = vault.persist(&with_keys());
         assert!(has_plaintext(&disk));
         assert!(vault.load().is_empty());

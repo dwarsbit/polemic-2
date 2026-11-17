@@ -1,7 +1,8 @@
 # Code signing
 
-The release workflow (`.github/workflows/release.yml`) signs the macOS
-and Windows builds once the secrets below exist. Until then those builds
+The release workflow (`.github/workflows/release.yml`, in
+dwarsbit/polemic-2) signs the macOS and Windows builds once the secrets
+below exist in that repository. Until then those builds
 are unsigned and the run shows a warning. If only some secrets of a
 platform are set, the build fails and names the missing one.
 
@@ -104,7 +105,7 @@ Common errors:
 
 ## Checking a release
 
-After running the Release workflow, open its run in the Actions tab. A
+After a release, open the run of the Release workflow in polemic-2's Actions tab. A
 _Configure macOS signing_ or _Configure Windows signing_ step without a
 warning means that platform was signed. On a downloaded build:
 

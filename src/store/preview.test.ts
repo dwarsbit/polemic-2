@@ -59,7 +59,11 @@ describe("compileNow", () => {
       mainFile: "main.tex",
     });
     compileProject.mockImplementationOnce(() =>
-      Promise.reject({ kind: "noTex", message: "failed to run latexmk", retryAfter: null }),
+      Promise.reject({
+        kind: "noTex",
+        message: "failed to run latexmk",
+        retryAfter: null,
+      }),
     );
     await usePreviewStore.getState().compileNow();
     expect(usePreviewStore.getState()).toMatchObject({
@@ -70,10 +74,17 @@ describe("compileNow", () => {
 
     usePreviewStore.setState({ status: "compiling", error: null, errorKind: null });
     compileProject.mockImplementationOnce(() =>
-      Promise.reject({ kind: "cancelled", message: "A newer compile took over.", retryAfter: null }),
+      Promise.reject({
+        kind: "cancelled",
+        message: "A newer compile took over.",
+        retryAfter: null,
+      }),
     );
     await usePreviewStore.getState().compileNow();
-    expect(usePreviewStore.getState()).toMatchObject({ status: "compiling", error: null });
+    expect(usePreviewStore.getState()).toMatchObject({
+      status: "compiling",
+      error: null,
+    });
 
     compileProject.mockImplementationOnce(() => Promise.reject("plain failure"));
     await usePreviewStore.getState().compileNow();
