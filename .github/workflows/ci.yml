@@ -3,7 +3,7 @@ name: CI
 # Scholarkit mirrors its main here, and a branch by hand as scholarkit/<branch>.
 on:
   push:
-    branches: [main, "scholarkit/**"]
+    branches: [main, "scholarkit/**", "claude/**"]
   pull_request:
   workflow_dispatch:
 
